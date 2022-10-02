@@ -64,11 +64,6 @@ namespace Utility
                 gameObject.FixColliders();
             }
         }
-        public static void OpenLink(string url)
-        {
-            Type type = Type.GetType("UnityEngine.Application, UnityEngine.CoreModule");
-            type.GetMethod("OpenURL", BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static).Invoke(null, new object[] { url });
-        }
         public static void ShowDialog(DialogBox dialogBox)
         {
             dialogBox.gameObject.SetActive(true);
