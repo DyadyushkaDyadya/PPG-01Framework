@@ -8,7 +8,7 @@ using UnityEngine.Events;
 using TMPro;
 using System.Reflection;
 
-namespace Torture
+namespace Utility
 {
     public static class Utility
     {
