@@ -1,4 +1,7 @@
 # People Playground - 01 Framework
+
+Created for more convenient creation of mods for People Playground.
+Created by 01 Studio
 ____
 How using?
 ===========
