@@ -40,6 +40,10 @@ namespace Utility
             pointBehaviour.radius = radius;
             pointBehaviour.vector = vector;
         }
+        public static bool IsColissionDisabled(this GameObject gameObject)
+        {
+            return gameObject.layer == 10 ? true : false;
+        }
         public static void DrawCollider(this GameObject gameObject)
         {
             gameObject.AddComponent<PointDebuggerCollider>().collider = gameObject.GetComponent<Collider2D>();
