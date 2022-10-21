@@ -40,7 +40,7 @@ namespace Utility
             pointBehaviour.radius = radius;
             pointBehaviour.vector = vector;
         }
-        public static bool IsColissionDisabled(this GameObject gameObject)
+        public static bool IsCollissionDisabled(this GameObject gameObject)
         {
             return gameObject.layer == 10 ? true : false;
         }
