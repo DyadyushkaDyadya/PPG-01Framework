@@ -40,7 +40,7 @@ namespace Utility
             pointBehaviour.radius = radius;
             pointBehaviour.vector = vector;
         }
-        public static bool IsCollissionDisabled(this GameObject gameObject)
+        public static bool IsColissionDisabled(this GameObject gameObject)
         {
             return gameObject.layer == 10 ? true : false;
         }
@@ -108,6 +108,11 @@ namespace Utility
             physicalBehaviour.OverrideShotSounds = Array.Empty<AudioClip>();
             physicalBehaviour.OverrideImpactSounds = Array.Empty<AudioClip>();
         }
+        public static void OpenLink(string url)
+        {
+            Type type = Type.GetType("UnityEngine.Application, UnityEngine.CoreModule");
+            type.GetMethod("OpenURL", BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static).Invoke(null, new object[] { url });
+        }
         public static void ChangeSpecificLimbSprite(this LimbBehaviour limbBehaviour, Sprite skin, Sprite flash, Sprite bone, Sprite damage)
         {
             var limbSpriteRenderer = limbBehaviour.GetComponent<SpriteRenderer>();
@@ -118,7 +123,7 @@ namespace Utility
         }
         public static void UpdateOutline(this GameObject gameObject)
         {
-            if(gameObject.TryGetComponent<PhysicalBehaviour>(out PhysicalBehaviour physicalBehaviour))
+            if (gameObject.TryGetComponent<PhysicalBehaviour>(out PhysicalBehaviour physicalBehaviour))
             {
                 physicalBehaviour.RefreshOutline();
             }
@@ -155,6 +160,22 @@ namespace Utility
         private void Update()
         {
             ModAPI.Draw.Collider(collider);
+        }
+    }
+    public class FreezerDrag : MonoBehaviour
+    {
+        public FreezeBehaviour freezeBehaviour;
+        private void Start()
+        {
+            OnMouseUp();
+        }
+        private void OnMouseUp()
+        {
+            freezeBehaviour = gameObject.GetOrAddComponent<FreezeBehaviour>();
+        }
+        private void OnMouseDown()
+        {
+            UnityEngine.Object.Destroy(freezeBehaviour);
         }
     }
     public class ActOnCollideOwn : MonoBehaviour
