@@ -82,6 +82,7 @@ namespace Utility
             collider.OverlapCollider(new ContactFilter2D(), colliders);
             return colliders.ToArray();
         }
+        public static
         public static TMP_FontAsset GetTMP_FontAsset(string nameFont)
         {
             switch (nameFont)
@@ -120,6 +121,11 @@ namespace Utility
             limbSpriteRenderer.material.SetTexture("_FleshTex", flash.texture);
             limbSpriteRenderer.material.SetTexture("_BoneTex", bone.texture);
             limbSpriteRenderer.material.SetTexture("_DamageTex", damage.texture);
+        }
+        public static PhysicalProperties GetBoundsPhysicalProperties()
+        {
+            var map = MapRegistry.GetMap("fb813068-e717-45de-a97f-4677a41758e6");
+            return map.Prefab.transform.Find("Root/Left wall").GetComponent<PhysicalBehaviour>().Properties;
         }
         public static void UpdateOutline(this GameObject gameObject)
         {
