@@ -8,7 +8,7 @@ using UnityEngine.Events;
 using TMPro;
 using System.Reflection;
 
-namespace Mod
+namespace Utility
 {
     public static class Utility
     {
@@ -82,6 +82,7 @@ namespace Mod
             collider.OverlapCollider(new ContactFilter2D(), colliders);
             return colliders.ToArray();
         }
+        public static
         public static TMP_FontAsset GetTMP_FontAsset(string nameFont)
         {
             switch (nameFont)
@@ -94,13 +95,6 @@ namespace Mod
         public static GameObject CreateChildObject(string name, Transform parent)
         {
             var gameObject = new GameObject(name);
-            gameObject.transform.SetParent(parent);
-            gameObject.transform.localScale = new Vector3(1, 1, 1);
-            return gameObject;
-        }
-        public static GameObject CreateChildObject(GameObject prefab, Transform parent)
-        {
-            var gameObject = GameObject.Instantiate(prefab);
             gameObject.transform.SetParent(parent);
             gameObject.transform.localScale = new Vector3(1, 1, 1);
             return gameObject;
@@ -127,6 +121,11 @@ namespace Mod
             limbSpriteRenderer.material.SetTexture("_FleshTex", flash.texture);
             limbSpriteRenderer.material.SetTexture("_BoneTex", bone.texture);
             limbSpriteRenderer.material.SetTexture("_DamageTex", damage.texture);
+        }
+        public static PhysicalProperties GetBoundsPhysicalProperties()
+        {
+            var map = MapRegistry.GetMap("fb813068-e717-45de-a97f-4677a41758e6");
+            return map.Prefab.transform.Find("Root/Left wall").GetComponent<PhysicalBehaviour>().Properties;
         }
         public static void UpdateOutline(this GameObject gameObject)
         {
@@ -169,26 +168,20 @@ namespace Mod
             ModAPI.Draw.Collider(collider);
         }
     }
-    public class MapFreezerDrag : MonoBehaviour
+    public class FreezerDrag : MonoBehaviour
     {
         public FreezeBehaviour freezeBehaviour;
         private void Start()
         {
             OnMouseUp();
         }
-        private void Update()
-        {
-            gameObject.GetOrAddComponent<PhysicalBehaviour>().Temperature = 14f;
-        }
         private void OnMouseUp()
         {
             freezeBehaviour = gameObject.GetOrAddComponent<FreezeBehaviour>();
-            gameObject.layer = 11;
         }
         private void OnMouseDown()
         {
             UnityEngine.Object.Destroy(freezeBehaviour);
-            gameObject.layer = 9;
         }
     }
     public class ActOnCollideOwn : MonoBehaviour
