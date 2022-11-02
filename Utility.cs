@@ -8,7 +8,7 @@ using UnityEngine.Events;
 using TMPro;
 using System.Reflection;
 
-namespace Utility
+namespace Utility01
 {
     public static class Utility
     {
@@ -82,7 +82,6 @@ namespace Utility
             collider.OverlapCollider(new ContactFilter2D(), colliders);
             return colliders.ToArray();
         }
-        public static
         public static TMP_FontAsset GetTMP_FontAsset(string nameFont)
         {
             switch (nameFont)
@@ -95,6 +94,13 @@ namespace Utility
         public static GameObject CreateChildObject(string name, Transform parent)
         {
             var gameObject = new GameObject(name);
+            gameObject.transform.SetParent(parent);
+            gameObject.transform.localScale = new Vector3(1, 1, 1);
+            return gameObject;
+        }
+        public static GameObject CreateChildObject(GameObject prefab, Transform parent)
+        {
+            var gameObject = GameObject.Instantiate(prefab);
             gameObject.transform.SetParent(parent);
             gameObject.transform.localScale = new Vector3(1, 1, 1);
             return gameObject;
@@ -122,11 +128,6 @@ namespace Utility
             limbSpriteRenderer.material.SetTexture("_BoneTex", bone.texture);
             limbSpriteRenderer.material.SetTexture("_DamageTex", damage.texture);
         }
-        public static PhysicalProperties GetBoundsPhysicalProperties()
-        {
-            var map = MapRegistry.GetMap("fb813068-e717-45de-a97f-4677a41758e6");
-            return map.Prefab.transform.Find("Root/Left wall").GetComponent<PhysicalBehaviour>().Properties;
-        }
         public static void UpdateOutline(this GameObject gameObject)
         {
             if (gameObject.TryGetComponent<PhysicalBehaviour>(out PhysicalBehaviour physicalBehaviour))
@@ -141,6 +142,17 @@ namespace Utility
         public static void SuccessfulNotify(string message)
         {
             ModAPI.Notify($"<color=\"green\">{message}");
+        }
+        public static PhysicalProperties GetPhysicalProperties(this GameObject gameObject)
+        {
+            if (gameObject.TryGetComponent<PhysicalBehaviour>(out PhysicalBehaviour physicalBehaviour))
+            {
+                return physicalBehaviour.Properties;
+            }
+            else
+            {
+                return null;
+            }
         }
     }
     public class PointDebuggerCircle : MonoBehaviour
