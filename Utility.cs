@@ -12,6 +12,7 @@ namespace Utility01
 {
     public static class Utility
     {
+        public static string modPath;
         public static Vector3 GetModuleVector(this Vector3 vector)
         {
             return new Vector3(Math.Abs(vector.x), Math.Abs(vector.y), Math.Abs(vector.z));
@@ -120,6 +121,18 @@ namespace Utility01
             Type type = Type.GetType("UnityEngine.Application, UnityEngine.CoreModule");
             type.GetMethod("OpenURL", BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static).Invoke(null, new object[] { url });
         }
+        public static void ModMetaCache(string modPath)
+        {
+            Utility.modPath = modPath;
+        }
+        public static Sprite LoadSprite(string path)
+        {
+            return Utils.LoadSprite(modPath + "\\" + path);
+        }
+        public static Texture LoadTexture(string path)
+        {
+            return Utils.LoadTexture(modPath + "\\" + path);
+        }
         public static void ChangeSpecificLimbSprite(this LimbBehaviour limbBehaviour, Sprite skin, Sprite flash, Sprite bone, Sprite damage)
         {
             var limbSpriteRenderer = limbBehaviour.GetComponent<SpriteRenderer>();
@@ -127,6 +140,10 @@ namespace Utility01
             limbSpriteRenderer.material.SetTexture("_FleshTex", flash.texture);
             limbSpriteRenderer.material.SetTexture("_BoneTex", bone.texture);
             limbSpriteRenderer.material.SetTexture("_DamageTex", damage.texture);
+        }
+        public static GameObject FindPrefab(string name)
+        {
+            return Resources.Load<GameObject>(name);
         }
         public static void UpdateOutline(this GameObject gameObject)
         {
