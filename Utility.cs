@@ -129,6 +129,14 @@ namespace Utility01
 		public static string Tag;
 		public static string modPath;
 		public static string cultureInfo = CultureInfo.CurrentCulture.Name.ToLower();
+		public const bool DebugMode = true;
+		public static void Log(LogType logType, object message)
+		{
+			if (DebugMode)
+			{
+				Debug.unityLogger.Log(logType, message);
+			}
+		}
 		internal static void SimpleLiquidRegister(IDWithLiqud liquid) => ModAPI.RegisterLiquid(liquid.ID, liquid);
 		internal static Quaternion RotateTo(this Transform transform, Transform target) => Quaternion.Euler(0, 0, Mathf.Atan2(target.position.y - transform.position.y, target.position.x - transform.position.x) * Mathf.Rad2Deg);
 		internal static Quaternion RotateTo(this Vector3 position, Vector3 targetPosition) => Quaternion.Euler(0, 0, Mathf.Atan2(targetPosition.y - position.y, targetPosition.x - position.x) * Mathf.Rad2Deg);
@@ -1399,6 +1407,26 @@ namespace Utility01
 		#region RegrowthLogic
 		private void ReabilityLimb(LimbBehaviour limbBehaviour)
 		{
+			try
+			{
+				foreach (PhysicalBehaviour.Penetration penetration in limbBehaviour.PhysicalBehaviour.penetrations)
+				{
+					typeof(PhysicalBehaviour).GetMethod("DestroyStabJoint", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(limbBehaviour.PhysicalBehaviour, new object[] { penetration });
+				}
+				foreach (PhysicalBehaviour.Penetration victimPenetration in limbBehaviour.PhysicalBehaviour.victimPenetrations)
+				{
+					victimPenetration.Active = false;
+					limbBehaviour.PhysicalBehaviour.stabWoundCount--;
+					limbBehaviour.PhysicalBehaviour.beingStabbedBy.Remove(limbBehaviour.PhysicalBehaviour);
+					victimPenetration.Stabber.penetrations.Remove(victimPenetration);
+					typeof(PhysicalBehaviour).GetMethod("UndoPenetrationNoCollision", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(limbBehaviour.PhysicalBehaviour, new object[] { victimPenetration });
+				}
+				limbBehaviour.PhysicalBehaviour.victimPenetrations.Clear();
+			}
+			catch (Exception Exeption)
+			{
+				Utility.Log(LogType.Exception, "Problem with ReabilityLimb " + limbBehaviour.name + " " + Exeption);
+			}
 			limbBehaviour.gameObject.SetActive(true); // убеждаемся в том что лимба включена, в случае краша она отключается
 			foreach (var colliider in limbBehaviour.PhysicalBehaviour.colliders) // врубаем коллайдеры если они выключены
 			{
@@ -1442,8 +1470,7 @@ namespace Utility01
 		}
 		public void ReabilityJoint(LimbBehaviour limbBehaviour)
 		{
-			if (Debugging)
-				Debug.Log($"[RegrowthModule] {limbBehaviour.name} request reability joint");
+			Utility.Log(LogType.Log, $"[RegrowthModule] {limbBehaviour.name} request reability joint");
 			var limbInfo = GetLimbInformation(limbBehaviour);
 			var jointInfo = limbInfo.hingeJointInformation;
 			LimbBehaviour probablyGoodLimb = null;
@@ -1459,8 +1486,7 @@ namespace Utility01
 				limbBehaviour.PhysicalBehaviour.rigidbody.rotation = probablyGoodLimb.PhysicalBehaviour.rigidbody.rotation; // используем Rigidbody2D.rotation, потому что HingeJoint2D при установке upperBody не использует позицию Transform.rotation, он использует Rigidbody2D.position для расчёта угла между объектом и connectedBody. Если мы используем transform.rotation, то будет отклонение в несколько градусов. Это ещё один из длинных комментариев.
 				if (GetEmptyJoint(probablyGoodLimb) != null)
 				{
-					if (Debugging)
-						Debug.Log($"[RegrowthModule] {limbBehaviour.name} find PGL: {probablyGoodLimb.name}");
+					Utility.Log(LogType.Log, $"[RegrowthModule] {limbBehaviour.name} find PGL: {probablyGoodLimb.name}");
 					var probablyGoodLimbJoint = GetEmptyJoint(probablyGoodLimb);
 					var pInfo = GetLimbInformation(probablyGoodLimb);
 					var probablyGoodLimbJointInfo = pInfo.hingeJointInformation;
@@ -1493,8 +1519,7 @@ namespace Utility01
 					limbBehaviour.transform.position = connectedBody.transform.position;
 					limbBehaviour.PhysicalBehaviour.rigidbody.rotation = connectedBody.PhysicalBehaviour.rigidbody.rotation;  // используем Rigidbody2D.rotation, потому что HingeJoint2D при установке upperBody не использует позицию Transform.rotation, он использует Rigidbody2D.position для расчёта угла между объектом и connectedBody. Если мы используем transform.rotation, то будет отклонение в несколько градусов. Это ещё один из длинных комментариев.
 					var joint = GetEmptyJoint(limbBehaviour);
-					if (Debugging)
-						Debug.Log($"[RegrowthModule] {limbBehaviour.name} create self joint: {connectedBody.name}");
+					Utility.Log(LogType.Log, $"[RegrowthModule] {limbBehaviour.name} create self joint: {connectedBody.name}");
 					joint.autoConfigureConnectedAnchor = false;
 					joint.anchor = jointInfo.anchor;
 					joint.connectedAnchor = jointInfo.connectedAnchor;
@@ -1609,8 +1634,7 @@ namespace Utility01
 		{
 			if (!Active)
 			{
-				if (Debugging)
-					Debug.Log("[RegrowthModule] Regrowth stopped, script don't active");
+				Utility.Log(LogType.Log, "[RegrowthModule] Regrowth stopped, script don't active");
 				return;
 			}
 			if (!PersonBehaviour.IsAlive())
@@ -1619,15 +1643,13 @@ namespace Utility01
 				{
 					if (controller.DontRegrowthDead)
 					{
-						if (Debugging)
-							Debug.Log("[RegrowthModule] Regrowth stopped, omg he dead!");
+						Utility.Log(LogType.Log, "[RegrowthModule] Regrowth stopped, omg he dead!");
 						return;
 					}
 				}
 				else
 				{
-					if (Debugging)
-						Debug.Log("[RegrowthModule] Regrowth stopped, omg he dead!");
+					Utility.Log(LogType.Log, "[RegrowthModule] Regrowth stopped, omg he dead!");
 					return;
 				}
 			}
@@ -1637,28 +1659,24 @@ namespace Utility01
 				{
 					if (controller.DontRegrowthWithoutRoot)
 					{
-						if (Debugging)
-							Debug.Log("[RegrowthModule] Regrowth stopped, root is destroyed");
+						Utility.Log(LogType.Log, "[RegrowthModule] Regrowth stopped, root is destroyed");
 						return;
 					}
 				}
 				else
 				{
-					if (Debugging)
-						Debug.Log("[RegrowthModule] Regrowth stopped, root is destroyed");
+					Utility.Log(LogType.Log, "[RegrowthModule] Regrowth stopped, root is destroyed");
 					return;
 				}
 			}
 			if (limbBehaviour.NodeBehaviour.IsRoot && denyRoot)
 			{
-				if (Debugging)
-					Debug.Log($"[RegrowthModule] {limbBehaviour.name} Denial of regrowth, limb is root.");
+				Utility.Log(LogType.Log, $"[RegrowthModule] {limbBehaviour.name} Denial of regrowth, limb is root.");
 				return;
 			}
 			if (limitRegrowthLimbs <= 0)
 			{
-				if (Debugging)
-					Debug.Log($"[RegrowthModule] {limbBehaviour.name} Denial of regrowth, over the limit.");
+				Utility.Log(LogType.Log, $"[RegrowthModule] {limbBehaviour.name} Denial of regrowth, over the limit.");
 				return;
 			}
 
@@ -1670,8 +1688,7 @@ namespace Utility01
 				{
 					if (controller.createFakeLimbs)
 					{
-						if (Debugging)
-							Debug.Log($"[RegrowthModule] {limbBehaviour.name} request create fakeLimbs");
+						Utility.Log(LogType.Log, $"[RegrowthModule] {limbBehaviour.name} request create fakeLimbs");
 						if (PersonBehaviour.Limbs.Where(l => l.gameObject.activeSelf && !l.NodeBehaviour.IsConnectedToRoot).ToArray().Length > 0) // проверяем нужно ли копировать
 						{
 							fakeLimbsCreated = true;
@@ -1783,15 +1800,13 @@ namespace Utility01
 			}
 			foreach (var connectedLimbToRegrowth in connectedLimbsNeedRegrowth)
 			{
-				if (Debugging)
-					Debug.Log($"[RegrowthModule] {limbBehaviour.name} request Regrowth Limb: {connectedLimbToRegrowth.name}");
+				Utility.Log(LogType.Log, $"[RegrowthModule] {limbBehaviour.name} request Regrowth Limb: {connectedLimbToRegrowth.name}");
 				RegrowthLimb(connectedLimbToRegrowth, limbBehaviour, onlyNeeded, limitRegrowthLimbs - 1);
 			}
 			ReabilityJoint(limbBehaviour);
 			if (limbBehaviour.gameObject.TryGetComponent(out GoreStringBehaviour goreStringBehaviour))
 			{
-				if (Debugging)
-					Debug.Log($"[RegrowthModule] {limbBehaviour.name} destroyed gore strings");
+				Utility.Log(LogType.Log, $"[RegrowthModule] {limbBehaviour.name} destroyed gore strings");
 				goreStringBehaviour.DestroyJoint();
 			}
 			if (limbBehaviour.gameObject.TryGetComponent(out GripBehaviour gripBehaviour))
@@ -1807,23 +1822,20 @@ namespace Utility01
 			{
 				controller.OnRegrowthLimb(limbBehaviour);
 			}
-			if (Debugging)
-				Debug.Log($"[RegrowthModule] {limbBehaviour.name} end Regrowth Proccess");
+			Utility.Log(LogType.Log, $"[RegrowthModule] {limbBehaviour.name} end Regrowth Proccess");
 		}
 		#endregion
 		#region Coroutines
 		private IEnumerator CollectInformationCoroutine()
 		{
 			yield return new WaitForSeconds(0.1f);
-			if (Debugging)
-				Debug.Log($"[RegrowthModule] Start Collect Limbs Information");
+			Utility.Log(LogType.Log, $"[RegrowthModule] Start Collect Limbs Information");
 			LimbInformations = new LimbInformation[PersonBehaviour.Limbs.Length];
 			for (int i = 0; i < PersonBehaviour.Limbs.Length; i++)
 			{
 				LimbInformations[i] = new LimbInformation(PersonBehaviour.Limbs[i]);
 			}
-			if (Debugging)
-				Debug.Log($"[RegrowthModule] Limbs Collected Information");
+			Utility.Log(LogType.Log, $"[RegrowthModule] Limbs Collected Information");
 		}
 		private IEnumerator RepositingLimbsCoroutine()
 		{
