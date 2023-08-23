@@ -2390,6 +2390,80 @@ namespace Utility01
 	{
 		public List<ObjectState> Objects;
 	}
+	public class TimeFreezer : MonoBehaviour
+	{
+		public float TimeFactor = 0.5f;
+		const float EXIT_DUMB = 0.98f;
+		public Dictionary<Rigidbody2D, BodyInfo> bodyInfos = new Dictionary<Rigidbody2D, BodyInfo>();
+		public class BodyInfo
+		{
+			public Vector2 UnscaledVelocity;
+			public float UnscaledAngularVelocity;
+			public Vector2? PrevVelocity;
+			public float? PrevAngularVelocity;
+			public float GravityScale;
+		}
+		public void Start()
+		{
+			gameObject.GetOrAddComponent<FreezeBehaviour>();
+			foreach (Collider2D collider in GetComponents<Collider2D>())
+			{
+				collider.isTrigger = true;
+			}
+		}
+		public void FixedUpdate()
+		{
+			foreach (var pair in bodyInfos)
+			{
+				var rb = pair.Key;
+				var info = pair.Value;
+				if (info.PrevVelocity != null)
+				{
+					var acc = rb.velocity - info.PrevVelocity.Value;
+					var angularAcc = rb.angularVelocity - info.PrevAngularVelocity.Value;
+					info.PrevVelocity = rb.velocity = info.UnscaledVelocity * TimeFactor;
+					info.PrevAngularVelocity = rb.angularVelocity = info.UnscaledAngularVelocity * TimeFactor;
+					info.UnscaledVelocity += acc;
+					info.UnscaledAngularVelocity += angularAcc;
+				}
+				else
+				{
+					info.PrevVelocity = rb.velocity = info.UnscaledVelocity * TimeFactor;
+					info.PrevAngularVelocity = rb.angularVelocity = info.UnscaledAngularVelocity * TimeFactor;
+				}
+			}
+		}
+		private void OnTriggerEnter2D(Collider2D other)
+		{
+			var info = new BodyInfo();
+			info.PrevVelocity = null;
+			info.UnscaledVelocity = other.attachedRigidbody.velocity;
+			info.UnscaledAngularVelocity = other.attachedRigidbody.angularVelocity;
+			info.GravityScale = other.attachedRigidbody.gravityScale;
+			other.attachedRigidbody.gravityScale = TimeFactor;
+			bodyInfos.Add(other.attachedRigidbody, info);
+		}
+		private void OnTriggerExit2D(Collider2D other)
+		{
+			if (bodyInfos.ContainsKey(other.attachedRigidbody))
+			{
+				var info = bodyInfos[other.attachedRigidbody];
+				other.attachedRigidbody.angularVelocity = info.UnscaledAngularVelocity * EXIT_DUMB;
+				other.attachedRigidbody.velocity = info.UnscaledVelocity * EXIT_DUMB;
+				other.attachedRigidbody.gravityScale = info.GravityScale;
+				bodyInfos.Remove(other.attachedRigidbody);
+			}
+		}
+	}
+	public class AimToMouse : MonoBehaviour
+	{
+		public Rigidbody2D rigidbody;
+		private void FixedUpdate()
+		{
+			rigidbody.angularVelocity *= 0.95f;
+			rigidbody.MoveRotation(transform.position.RotateTo(Global.main.MousePosition));
+		}
+	}
 	public class FreezerDrag : MonoBehaviour
 	{
 		public FreezeBehaviour freezeBehaviour;
