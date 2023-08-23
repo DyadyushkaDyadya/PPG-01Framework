@@ -2394,7 +2394,7 @@ namespace Utility01
 	{
 		public float TimeFactor = 0.5f;
 		const float EXIT_DUMB = 0.98f;
-		public Dictionary<Rigidbody2D, BodyInfo> bodyInfos = new Dictionary<Rigidbody2D, BodyInfo>();
+		public List<(Rigidbody2D, BodyInfo)> bodyInfos = new List<(Rigidbody2D, BodyInfo)>();
 		public class BodyInfo
 		{
 			public Vector2 UnscaledVelocity;
@@ -2413,10 +2413,17 @@ namespace Utility01
 		}
 		public void FixedUpdate()
 		{
-			foreach (var pair in bodyInfos)
+			for(int i = 0; i < bodyInfos.Count; i++)
 			{
-				var rb = pair.Key;
-				var info = pair.Value;
+				if (bodyInfos.Select(b => b.Item1).ToArray()[i] == null)
+				{
+					bodyInfos.RemoveAt(i);
+				}
+			}
+			foreach (var pair in bodyInfos.Distinct())
+			{
+				var rb = pair.Item1;
+				var info = pair.Item2;
 				if (info.PrevVelocity != null)
 				{
 					var acc = rb.velocity - info.PrevVelocity.Value;
@@ -2440,20 +2447,28 @@ namespace Utility01
 			info.UnscaledVelocity = other.attachedRigidbody.velocity;
 			info.UnscaledAngularVelocity = other.attachedRigidbody.angularVelocity;
 			info.GravityScale = other.attachedRigidbody.gravityScale;
-			other.attachedRigidbody.gravityScale = TimeFactor;
-			bodyInfos.Add(other.attachedRigidbody, info);
+			//other.attachedRigidbody.gravityScale = TimeFactor;
+			bodyInfos.Add((other.attachedRigidbody, info));
 		}
 		private void OnTriggerExit2D(Collider2D other)
 		{
-			if (bodyInfos.ContainsKey(other.attachedRigidbody))
+			try
 			{
-				var info = bodyInfos[other.attachedRigidbody];
-				other.attachedRigidbody.angularVelocity = info.UnscaledAngularVelocity * EXIT_DUMB;
-				other.attachedRigidbody.velocity = info.UnscaledVelocity * EXIT_DUMB;
-				other.attachedRigidbody.gravityScale = info.GravityScale;
-				bodyInfos.Remove(other.attachedRigidbody);
-			}
+                if (bodyInfos.Select(b => b.Item1).Contains(other.attachedRigidbody))
+                {
+                    var info = bodyInfos.Where(b => b.Item1 == other.attachedRigidbody).First().Item2;
+                    other.attachedRigidbody.angularVelocity = info.UnscaledAngularVelocity * EXIT_DUMB;
+                    other.attachedRigidbody.velocity = info.UnscaledVelocity * EXIT_DUMB;
+                    //other.attachedRigidbody.gravityScale = info.GravityScale;
+                    bodyInfos.RemoveAt(bodyInfos.Select(b => b.Item1).ToList().IndexOf(other.attachedRigidbody));
+                }
+            }
+			catch { }
 		}
+		public void Ignore(Collider2D collider2D, bool ignore = true)
+		{
+			Physics2D.IgnoreCollision(collider2D, gameObject.GetComponent<Collider2D>(), ignore);
+        }
 	}
 	public class AimToMouse : MonoBehaviour
 	{
