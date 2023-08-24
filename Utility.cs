@@ -206,6 +206,27 @@ namespace Utility01
 				if (refresh) Phys.RefreshOutline();
 			}
 		}
+		internal static void FixParticleRenderer(ParticleSystemRenderer particleSystemRenderer)
+		{
+			if(particleSystemRenderer.trailMaterial != null)
+			{
+				var tryShader = Shader.Find(particleSystemRenderer.trailMaterial.shader.name);
+				if(tryShader != null)
+				{
+					particleSystemRenderer.trailMaterial.shader = tryShader;
+					particleSystemRenderer.trailMaterial.renderQueue = 3000;
+				}
+			}
+			if(particleSystemRenderer.material != null)
+			{
+                var tryShader = Shader.Find(particleSystemRenderer.material.shader.name);
+                if (tryShader != null)
+                {
+                    particleSystemRenderer.material.shader = tryShader;
+                    particleSystemRenderer.material.renderQueue = 3000;
+                }
+            }
+		}
 		internal static void HealLimb(this LimbBehaviour limb)
 		{
 			limb.PhysicalBehaviour.BurnProgress -= limb.PhysicalBehaviour.BurnProgress * 0.01f;
