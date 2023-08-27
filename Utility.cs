@@ -967,6 +967,17 @@ namespace Utility01
 			physicalBehaviour.OverrideImpactSounds = Array.Empty<AudioClip>();
 			return gameObject;
 		}
+		internal static void RecreateBoxCollider(this GameObject gameObject)
+		{
+			foreach(var boxCollider in gameObject.GetComponents<BoxCollider2D>())
+			{
+				boxCollider.Destroy();
+			}
+			var newBoxCollider = gameObject.AddComponent<BoxCollider2D>();
+			var phys = gameObject.GetComponent<PhysicalBehaviour>();
+			phys.colliders = new Collider2D[] { newBoxCollider };
+			phys.BakeColliderGridPoints();
+		}
 		internal static void TryCatchAction(Action tryAction, Action catchAction)
 		{
 			try
@@ -2411,6 +2422,38 @@ namespace Utility01
 	{
 		public List<ObjectState> Objects;
 	}
+	public class TimeSingleFreezer : MonoBehaviour
+	{
+		public float TimeFactor = 1f;
+		public Rigidbody2D rb;
+        public Vector2 UnscaledVelocity;
+        public float UnscaledAngularVelocity;
+        public Vector2? PrevVelocity;
+		public float? PrevAngularVelocity;
+		private void Start()
+		{
+			rb = gameObject.GetComponent<Rigidbody2D>();
+            UnscaledVelocity = rb.velocity;
+            UnscaledAngularVelocity = rb.angularVelocity;
+        }
+		private void FixedUpdate()
+		{
+			if(PrevVelocity != null)
+			{
+                var acc = rb.velocity - PrevVelocity.Value;
+                var angularAcc = rb.angularVelocity - PrevAngularVelocity.Value;
+                PrevVelocity = rb.velocity = UnscaledVelocity * TimeFactor;
+                PrevAngularVelocity = rb.angularVelocity = UnscaledAngularVelocity * TimeFactor;
+                UnscaledVelocity += acc;
+                UnscaledAngularVelocity += angularAcc;
+            }
+            else
+            {
+                PrevVelocity = rb.velocity = UnscaledVelocity * TimeFactor;
+                PrevAngularVelocity = rb.angularVelocity = UnscaledAngularVelocity * TimeFactor;
+            }
+        }
+	}
 	public class TimeFreezer : MonoBehaviour
 	{
 		public float TimeFactor = 0.5f;
@@ -2792,8 +2835,8 @@ namespace Utility01
 					transform.localScale = Parent.localScale;
 				if (RotationSync)
 				{
-					transform.eulerAngles = new Vector3(transform.eulerAngles.x, transform.eulerAngles.y, transform.eulerAngles.z + rotationOffset);
-				}
+                    transform.eulerAngles = new Vector3(Parent.eulerAngles.x, Parent.eulerAngles.y, Parent.eulerAngles.z + rotationOffset);
+                }
 			}
 		}
 		private IEnumerator DestroyAction()
