@@ -173,11 +173,12 @@ namespace Utility01
                 AfterSpawn = (Instance) => afterSpawn.Invoke(Instance.GetComponent<T>())
             };
         }
-        internal static LimbBehaviour GetNearestLimb(this Vector2 vector, PersonBehaviour exclude = null)
+        internal static LimbBehaviour GetNearestLimb(this Vector2 vector, PersonBehaviour exclude = null, List<LimbBehaviour> limbBehaviours = null)
         {
             float ClosestDest = Mathf.Infinity;
             LimbBehaviour Target = null;
-            foreach (LimbBehaviour targets in LimbBehaviourManager.Limbs)
+            var limbList = limbBehaviours == null ? LimbBehaviourManager.Limbs : limbBehaviours;
+            foreach (LimbBehaviour targets in limbList)
             {
                 if (targets.isActiveAndEnabled && targets.gameObject.activeSelf && targets.HasBrain && targets.IsConsideredAlive && targets.Person && targets.Person.IsAlive() && targets.Person != exclude)
                 {
