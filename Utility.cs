@@ -137,15 +137,45 @@ namespace Utility01
 				Debug.unityLogger.Log(logType, message);
 			}
 		}
+		public enum PersonLimbArrayIdFromName
+		{
+			Head, 
+			UpperBody, 
+			MiddleBody, 
+			LowerBody,
+			UpperLegFront, 
+			LowerLegFront, 
+			FootFront, 
+			UpperLeg, 
+			LowerLeg, 
+			Foot, 
+			UpperArmFront, 
+			LowerArmFront, 
+			UpperArm, 
+			LowerArm
+		}
 		internal static void SimpleLiquidRegister(IDWithLiqud liquid) => ModAPI.RegisterLiquid(liquid.ID, liquid);
 		internal static Quaternion RotateTo(this Transform transform, Transform target) => Quaternion.Euler(0, 0, Mathf.Atan2(target.position.y - transform.position.y, target.position.x - transform.position.x) * Mathf.Rad2Deg);
 		internal static Quaternion RotateTo(this Vector3 position, Vector3 targetPosition) => Quaternion.Euler(0, 0, Mathf.Atan2(targetPosition.y - position.y, targetPosition.x - position.x) * Mathf.Rad2Deg);
 		internal static Vector2 GetDirection(this Transform transform, Vector2 barrelDirection) => transform.TransformDirection(barrelDirection) * transform.localScale.x;
+		internal static Material GetMaterial(string name) => FindTypesInWorld<Material>().Where(shader => shader.name == name).FirstOrDefault();
 		internal static T[] FindTypesInWorld<T>() => Resources.FindObjectsOfTypeAll(typeof(T)) as T[];
 		internal static void GlobalRegister(Modification[] modifications)
 		{
 			foreach (Modification modification in modifications)
 				ModAPI.Register(modification);
+		}
+		internal static Category GetNewCategory(Sprite categoryIcon, string categoryName, string categoryDescription)
+		{
+			try
+			{
+				ModAPI.RegisterCategory(categoryName, categoryDescription, categoryIcon);
+			}
+			catch 
+			{ 
+				Debug.Log($"Category with name {categoryName} already exist!");
+			}
+			return ModAPI.FindCategory(categoryName);
 		}
 		internal static Modification CreateModification(SpawnableAsset originalItem, Sprite thumbnailOverride, Category categoryOverride, string nameOverride, string descriptionOverride, string nameToOrderByOverride, Action<GameObject> afterSpawn)
 		{
@@ -160,7 +190,7 @@ namespace Utility01
 				AfterSpawn = afterSpawn
 			};
 		}
-		internal static Modification CreateModification<T>(SpawnableAsset originalItem, Sprite thumbnailOverride, Category categoryOverride, string nameOverride, string descriptionOverride, string nameToOrderByOverride, Action<T> afterSpawn)
+		internal static Modification CreateModification<T>(SpawnableAsset originalItem, Sprite thumbnailOverride, Category categoryOverride, string nameOverride, string descriptionOverride, string nameToOrderByOverride, Action<T> afterSpawn) where T : Component
 		{
 			return new Modification()
 			{
@@ -170,7 +200,7 @@ namespace Utility01
 				CategoryOverride = categoryOverride,
 				NameToOrderByOverride = nameToOrderByOverride,
 				ThumbnailOverride = thumbnailOverride,
-				AfterSpawn = (Instance) => afterSpawn.Invoke(Instance.GetComponent<T>())
+				AfterSpawn = (Instance) => afterSpawn.Invoke(Instance.GetOrAddComponent<T>())
 			};
 		}
 		internal static LimbBehaviour GetNearestLimb(this Vector2 vector, PersonBehaviour exclude = null, List<LimbBehaviour> limbBehaviours = null)
@@ -192,7 +222,7 @@ namespace Utility01
 			}
 			return Target;
 		}
-        internal static void AdvancedSpriteChange(this SpriteRenderer spriteRenderer, Sprite sprite, bool refresh = true, bool fixColliders = true)
+		internal static void AdvancedSpriteChange(this SpriteRenderer spriteRenderer, Sprite sprite, bool refresh = true, bool fixColliders = true)
 		{
 			spriteRenderer.sprite = sprite;
 			if (spriteRenderer.transform.parent && spriteRenderer.transform.parent.TryGetComponent(out SpriteRenderer Pspriterender))
@@ -209,24 +239,24 @@ namespace Utility01
 		}
 		internal static void FixParticleRenderer(ParticleSystemRenderer particleSystemRenderer)
 		{
-			if(particleSystemRenderer.trailMaterial != null)
+			if (particleSystemRenderer.trailMaterial != null)
 			{
 				var tryShader = Shader.Find(particleSystemRenderer.trailMaterial.shader.name);
-				if(tryShader != null)
+				if (tryShader != null)
 				{
 					particleSystemRenderer.trailMaterial.shader = tryShader;
 					particleSystemRenderer.trailMaterial.renderQueue = 3000;
 				}
 			}
-			if(particleSystemRenderer.material != null)
+			if (particleSystemRenderer.material != null)
 			{
-                var tryShader = Shader.Find(particleSystemRenderer.material.shader.name);
-                if (tryShader != null)
-                {
-                    particleSystemRenderer.material.shader = tryShader;
-                    particleSystemRenderer.material.renderQueue = 3000;
-                }
-            }
+				var tryShader = Shader.Find(particleSystemRenderer.material.shader.name);
+				if (tryShader != null)
+				{
+					particleSystemRenderer.material.shader = tryShader;
+					particleSystemRenderer.material.renderQueue = 3000;
+				}
+			}
 		}
 		internal static void HealLimb(this LimbBehaviour limb)
 		{
@@ -456,11 +486,11 @@ namespace Utility01
 		}
 		public static void FixScaleZ(this GameObject gameObject)
 		{
-            if (gameObject.transform.localScale.z == 0)
-            {
-                gameObject.transform.localScale = new Vector3(gameObject.transform.localScale.x, gameObject.transform.localScale.y, 1);
-            }
-        }
+			if (gameObject.transform.localScale.z == 0)
+			{
+				gameObject.transform.localScale = new Vector3(gameObject.transform.localScale.x, gameObject.transform.localScale.y, 1);
+			}
+		}
 		public static ItemButtonBehaviour GetItemButtonBehaviour(SpawnableAsset spawnableAsset)
 		{
 			List<ItemButtonBehaviour> itemButtonBehaviours = (List<ItemButtonBehaviour>)typeof(CatalogBehaviour).GetField("items", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(GameObject.FindObjectOfType<CatalogBehaviour>()); // zooi <3
@@ -942,12 +972,16 @@ namespace Utility01
 			invoker.Delay = delay;
 			invoker.ActionForInvoke = action;
 		}
-		public static AudioSource CreateAudioSource(this GameObject gameObject, float minDistance = 5, float maxDistance = 30)
+		public static AudioSource CreateAudioSource(this GameObject gameObject, float minDistance = 5, float maxDistance = 30, bool add = true)
 		{
 			var audioSource = gameObject.AddComponent<AudioSource>();
 			audioSource.spatialBlend = 1;
 			audioSource.minDistance = minDistance;
 			audioSource.maxDistance = maxDistance;
+			if (add)
+			{
+				Global.main.AddAudioSource(audioSource);
+			}
 			return audioSource;
 		}
 		public static Color MixColor(this Color color, Color additiveColor)
@@ -977,14 +1011,14 @@ namespace Utility01
 		}
 		internal static BoxCollider2D RecreateBoxCollider(this GameObject gameObject)
 		{
-			foreach(var boxCollider in gameObject.GetComponents<BoxCollider2D>())
+			foreach (var boxCollider in gameObject.GetComponents<BoxCollider2D>())
 			{
 				boxCollider.Destroy();
 			}
 			var newBoxCollider = gameObject.AddComponent<BoxCollider2D>();
 			var phys = gameObject.GetComponent<PhysicalBehaviour>();
 			phys.colliders = new Collider2D[] { newBoxCollider };
-			if(gameObject.TryGetComponent(out LimbBehaviour limbBehaviour))
+			if (gameObject.TryGetComponent(out LimbBehaviour limbBehaviour))
 			{
 				limbBehaviour.Collider = newBoxCollider;
 			}
@@ -1015,8 +1049,8 @@ namespace Utility01
 			Prefab.GetOrAddComponent<SerialiseInstructions>().OriginalSpawnableAsset = asset;
 			try
 			{
-                CatalogBehaviour.PerformMod(asset, Prefab);
-            }
+				CatalogBehaviour.PerformMod(asset, Prefab);
+			}
 			catch { }
 			return Prefab;
 		}
@@ -1207,13 +1241,13 @@ namespace Utility01
 		[SkipSerialisation]
 		public bool attached;
 		public LimbClassification limbClassification;
-		public Vector2 offsetPosition;
-		public Vector3 offsetRotation;
-		public Vector2 scale;
-		public PersonBehaviour personBehaviour;
+		public Vector2 offsetPosition = Vector2.zero;
+		public Vector3 offsetRotation = Vector3.zero;
+		public Vector2 connectedAnchor = Vector2.zero;
+		public Vector2 scale = Vector2.one;
 		public FixedJoint2D fixedJoint;
-		public Vector2 connectedAnchor;
-		private PhysicalBehaviour physicalBehaviour;
+		public PersonBehaviour personBehaviour;
+		protected PhysicalBehaviour physicalBehaviour;
 		public enum LimbClassification
 		{
 			NoLimb,
@@ -1794,7 +1828,7 @@ namespace Utility01
 						switch (controller.destroyType)
 						{
 							case Controller.LimbDestroyType.Custom:
-								if(controller.DestroyLimbAction != null)
+								if (controller.DestroyLimbAction != null)
 								{
 									controller.DestroyLimbAction.Invoke(limbToCrush);
 								}
@@ -1893,11 +1927,11 @@ namespace Utility01
 			}
 			Utility.Log(LogType.Log, $"[RegrowthModule] Limbs Collected Information");
 			yield return new WaitForEndOfFrame();
-            if (onCollectedInfo != null)
-            {
-                onCollectedInfo.Invoke();
-            }
-        }
+			if (onCollectedInfo != null)
+			{
+				onCollectedInfo.Invoke();
+			}
+		}
 		private IEnumerator RepositingLimbsCoroutine()
 		{
 			for (int i = 0; i < PersonBehaviour.Limbs.Length; i++)
@@ -2447,44 +2481,44 @@ namespace Utility01
 			}
 		}
 	}
-    #endregion
-    #region OtherClasses
-    public class BladeSharp : MonoBehaviour, Messages.IOnBeforeSerialise, Messages.IOnAfterDeserialise
-    {
-        public class SoftConnection
-        {
-            [NonSerialized]
-            public FrictionJoint2D joint;
-            public PhysicalBehaviour phys;
-            public Collider2D coll;
-            [NonSerialized]
-            public bool shouldBeDeleted;
-            public SoftConnection(FrictionJoint2D joint, PhysicalBehaviour phys, Collider2D coll)
-            {
-                this.joint = joint;
-                this.phys = phys;
-                this.coll = coll;
-                shouldBeDeleted = false;
-            }
-        }
-        [SkipSerialisation]
-        public PhysicalBehaviour PhysicalBehaviour;
-        [SkipSerialisation]
-        public Collider2D SharpCollider;
-        [SkipSerialisation]
-        public float ConnectionStrength = 1600f;
-        [SkipSerialisation]
-        public float MinSpeed = 0.01f;
-        [SkipSerialisation]
-        public float MinSoftness = 0f;
-        [SkipSerialisation]
-        public Vector2 Tip = Vector2.up;
-        [SkipSerialisation]
-        public LayerMask LayerMask = 10752;
-        [HideInInspector]
-        public Guid[] SerialisableVictims = new Guid[0];
-        private readonly Collider2D[] buffer = new Collider2D[16];
-        private int bufferLength;
+	#endregion
+	#region OtherClasses
+	public class BladeSharp : MonoBehaviour, Messages.IOnBeforeSerialise, Messages.IOnAfterDeserialise
+	{
+		public class SoftConnection
+		{
+			[NonSerialized]
+			public FrictionJoint2D joint;
+			public PhysicalBehaviour phys;
+			public Collider2D coll;
+			[NonSerialized]
+			public bool shouldBeDeleted;
+			public SoftConnection(FrictionJoint2D joint, PhysicalBehaviour phys, Collider2D coll)
+			{
+				this.joint = joint;
+				this.phys = phys;
+				this.coll = coll;
+				shouldBeDeleted = false;
+			}
+		}
+		[SkipSerialisation]
+		public PhysicalBehaviour PhysicalBehaviour;
+		[SkipSerialisation]
+		public Collider2D SharpCollider;
+		[SkipSerialisation]
+		public float ConnectionStrength = 1600f;
+		[SkipSerialisation]
+		public float MinSpeed = 0.01f;
+		[SkipSerialisation]
+		public float MinSoftness = 0f;
+		[SkipSerialisation]
+		public Vector2 Tip = Vector2.up;
+		[SkipSerialisation]
+		public LayerMask LayerMask = 10752;
+		[HideInInspector]
+		public Guid[] SerialisableVictims = new Guid[0];
+		private readonly Collider2D[] buffer = new Collider2D[16];
+		private int bufferLength;
 		public bool ShouldSlice = false;
 		public bool SliceOnlyDeads = true;
 		public float SliceChance
@@ -2499,173 +2533,173 @@ namespace Utility01
 			}
 		}
 		public float m_SliceChance;
-        [SkipSerialisation]
-        public readonly Dictionary<PhysicalBehaviour, SoftConnection> softConnections = new Dictionary<PhysicalBehaviour, SoftConnection>();
-        private void FixedUpdate()
-        {
-            bool flag = PhysicalBehaviour.rigidbody.GetRelativePointVelocity(Tip).magnitude > MinSpeed;
-            ProcessSoftConnections(flag, flag ? 10f : ConnectionStrength);
-        }
-        private void ProcessSoftConnections(bool shouldSaw = true, float connectionStrength = 2f)
-        {
-            bufferLength = SharpCollider.OverlapCollider(new ContactFilter2D
-            {
-                layerMask = LayerMask,
-                useLayerMask = true
-            }, buffer);
-            foreach (KeyValuePair<PhysicalBehaviour, SoftConnection> softConnection in softConnections)
-            {
-                softConnection.Value.shouldBeDeleted = true;
-            }
-            for (int i = 0; i < bufferLength; i++)
-            {
-                Collider2D collider2D = buffer[i];
-                if (!(collider2D.transform.root != transform.root) || !Global.main.PhysicalObjectsInWorldByTransform.TryGetValue(collider2D.transform, out var value))
-                {
-                    continue;
-                }
-                if (softConnections.TryGetValue(value, out var value2))
-                {
-                    value2.shouldBeDeleted = !value2.coll || !value2.joint || !value2.phys;
-                    if (!value2.shouldBeDeleted)
-                    {
-                        Vector3 position = GetHitPoint(collider2D);
-                        value2.joint.anchor = value2.phys.transform.InverseTransformPoint(position);
-                        value2.joint.maxForce = connectionStrength;
-                        value2.joint.maxTorque = connectionStrength;
-                    }
-                }
-                else if (shouldSaw && value.Properties.Softness >= MinSoftness)
-                {
-                    SoftConnect(value, collider2D, connectionStrength);
-                }
-            }
-            while (true)
-            {
-                KeyValuePair<PhysicalBehaviour, SoftConnection>? keyValuePair = null;
-                foreach (KeyValuePair<PhysicalBehaviour, SoftConnection> softConnection2 in softConnections)
-                {
-                    if (softConnection2.Value.shouldBeDeleted)
-                    {
-                        keyValuePair = softConnection2;
-                        if ((bool)softConnection2.Value.coll)
-                        {
-                            IgnoreCollisionStackController.IgnoreCollisionSubstituteMethod(softConnection2.Value.coll, SharpCollider, ignore: false);
-                        }
-                        break;
-                    }
-                }
-                if (keyValuePair.HasValue)
-                {
-                    KeyValuePair<PhysicalBehaviour, SoftConnection> value3 = keyValuePair.Value;
-                    if ((bool)value3.Value.joint)
-                    {
-                        Destroy(value3.Value.joint);
-                    }
-                    softConnections.Remove(value3.Key);
-                    continue;
-                }
-                break;
-            }
-        }
-        private void OnDisable()
-        {
-            OnDestroy();
-        }
-        private void OnDestroy()
-        {
-            foreach (KeyValuePair<PhysicalBehaviour, SoftConnection> softConnection in softConnections)
-            {
-                Destroy(softConnection.Value.joint);
-            }
-            softConnections.Clear();
-        }
-        public void OnBeforeSerialise()
-        {
-            SerialisableVictims = softConnections.Where(delegate (KeyValuePair<PhysicalBehaviour, SoftConnection> p)
-            {
-                SoftConnection value2 = p.Value;
-                return !value2.shouldBeDeleted && (bool)value2.phys && (bool)value2.joint && (bool)value2.coll;
-            }).Select(delegate (KeyValuePair<PhysicalBehaviour, SoftConnection> p)
-            {
-                SoftConnection value = p.Value;
-                try
-                {
-                    return value.phys.GetComponent<SerialisableIdentity>().UniqueIdentity;
-                }
-                catch (Exception)
-                {
-                    return default(Guid);
-                }
-            }).ToArray();
-        }
-        public void OnAfterDeserialise(List<GameObject> gameobjects)
-        {
-            IEnumerable<SerialisableIdentity> source = gameobjects.SelectMany((GameObject c) => c.GetComponentsInChildren<SerialisableIdentity>());
-            int i;
-            for (i = 0; i < SerialisableVictims.Length; i++)
-            {
-                SerialisableIdentity serialisableIdentity = source.FirstOrDefault((SerialisableIdentity s) => s.UniqueIdentity == SerialisableVictims[i]);
-                if (!serialisableIdentity || !serialisableIdentity.TryGetComponent<PhysicalBehaviour>(out var component))
-                {
-                    Debug.LogWarning($"Victim with ID {SerialisableVictims[i]} does not exist");
-                }
-                else if (!component || component == null)
-                {
-                    Debug.LogWarning("Stab victim is null");
-                }
-                else
-                {
-                    SoftConnect(component, component.GetComponent<Collider2D>(), 2f);
-                }
-            }
-        }
-        private void SoftConnect(PhysicalBehaviour otherPhys, Collider2D coll, float connectionStrength)
-        {
-            if ((bool)otherPhys && (bool)coll)
-            {
-                Vector2 hitPoint = GetHitPoint(coll);
-                FrictionJoint2D frictionJoint2D = otherPhys.gameObject.AddComponent<FrictionJoint2D>();
-                frictionJoint2D.autoConfigureConnectedAnchor = true;
-                frictionJoint2D.enableCollision = true;
-                frictionJoint2D.maxForce = connectionStrength;
-                frictionJoint2D.connectedBody = PhysicalBehaviour.rigidbody;
-                frictionJoint2D.maxTorque = connectionStrength;
-                frictionJoint2D.anchor = otherPhys.transform.InverseTransformPoint(hitPoint);
-                IgnoreCollisionStackController.IgnoreCollisionSubstituteMethod(coll, SharpCollider);
-                Stabbing stabbing = new Stabbing(PhysicalBehaviour, otherPhys, (transform.position - otherPhys.transform.position).normalized, hitPoint);
-                otherPhys.SendMessage("Stabbed", stabbing, SendMessageOptions.DontRequireReceiver);
-                otherPhys.SendMessage("Shot", new Shot((transform.position - otherPhys.transform.position).normalized, hitPoint, 65), SendMessageOptions.DontRequireReceiver);
-                otherPhys.SendMessage("Shot", new Shot((transform.position - otherPhys.transform.position).normalized, hitPoint, 75), SendMessageOptions.DontRequireReceiver);
-				if (ShouldSlice && UnityEngine.Random.value > 1- SliceChance)
+		[SkipSerialisation]
+		public readonly Dictionary<PhysicalBehaviour, SoftConnection> softConnections = new Dictionary<PhysicalBehaviour, SoftConnection>();
+		private void FixedUpdate()
+		{
+			bool flag = PhysicalBehaviour.rigidbody.GetRelativePointVelocity(Tip).magnitude > MinSpeed;
+			ProcessSoftConnections(flag, flag ? 10f : ConnectionStrength);
+		}
+		private void ProcessSoftConnections(bool shouldSaw = true, float connectionStrength = 2f)
+		{
+			bufferLength = SharpCollider.OverlapCollider(new ContactFilter2D
+			{
+				layerMask = LayerMask,
+				useLayerMask = true
+			}, buffer);
+			foreach (KeyValuePair<PhysicalBehaviour, SoftConnection> softConnection in softConnections)
+			{
+				softConnection.Value.shouldBeDeleted = true;
+			}
+			for (int i = 0; i < bufferLength; i++)
+			{
+				Collider2D collider2D = buffer[i];
+				if (!(collider2D.transform.root != transform.root) || !Global.main.PhysicalObjectsInWorldByTransform.TryGetValue(collider2D.transform, out var value))
+				{
+					continue;
+				}
+				if (softConnections.TryGetValue(value, out var value2))
+				{
+					value2.shouldBeDeleted = !value2.coll || !value2.joint || !value2.phys;
+					if (!value2.shouldBeDeleted)
+					{
+						Vector3 position = GetHitPoint(collider2D);
+						value2.joint.anchor = value2.phys.transform.InverseTransformPoint(position);
+						value2.joint.maxForce = connectionStrength;
+						value2.joint.maxTorque = connectionStrength;
+					}
+				}
+				else if (shouldSaw && value.Properties.Softness >= MinSoftness)
+				{
+					SoftConnect(value, collider2D, connectionStrength);
+				}
+			}
+			while (true)
+			{
+				KeyValuePair<PhysicalBehaviour, SoftConnection>? keyValuePair = null;
+				foreach (KeyValuePair<PhysicalBehaviour, SoftConnection> softConnection2 in softConnections)
+				{
+					if (softConnection2.Value.shouldBeDeleted)
+					{
+						keyValuePair = softConnection2;
+						if ((bool)softConnection2.Value.coll)
+						{
+							IgnoreCollisionStackController.IgnoreCollisionSubstituteMethod(softConnection2.Value.coll, SharpCollider, ignore: false);
+						}
+						break;
+					}
+				}
+				if (keyValuePair.HasValue)
+				{
+					KeyValuePair<PhysicalBehaviour, SoftConnection> value3 = keyValuePair.Value;
+					if ((bool)value3.Value.joint)
+					{
+						Destroy(value3.Value.joint);
+					}
+					softConnections.Remove(value3.Key);
+					continue;
+				}
+				break;
+			}
+		}
+		private void OnDisable()
+		{
+			OnDestroy();
+		}
+		private void OnDestroy()
+		{
+			foreach (KeyValuePair<PhysicalBehaviour, SoftConnection> softConnection in softConnections)
+			{
+				Destroy(softConnection.Value.joint);
+			}
+			softConnections.Clear();
+		}
+		public void OnBeforeSerialise()
+		{
+			SerialisableVictims = softConnections.Where(delegate (KeyValuePair<PhysicalBehaviour, SoftConnection> p)
+			{
+				SoftConnection value2 = p.Value;
+				return !value2.shouldBeDeleted && (bool)value2.phys && (bool)value2.joint && (bool)value2.coll;
+			}).Select(delegate (KeyValuePair<PhysicalBehaviour, SoftConnection> p)
+			{
+				SoftConnection value = p.Value;
+				try
+				{
+					return value.phys.GetComponent<SerialisableIdentity>().UniqueIdentity;
+				}
+				catch (Exception)
+				{
+					return default(Guid);
+				}
+			}).ToArray();
+		}
+		public void OnAfterDeserialise(List<GameObject> gameobjects)
+		{
+			IEnumerable<SerialisableIdentity> source = gameobjects.SelectMany((GameObject c) => c.GetComponentsInChildren<SerialisableIdentity>());
+			int i;
+			for (i = 0; i < SerialisableVictims.Length; i++)
+			{
+				SerialisableIdentity serialisableIdentity = source.FirstOrDefault((SerialisableIdentity s) => s.UniqueIdentity == SerialisableVictims[i]);
+				if (!serialisableIdentity || !serialisableIdentity.TryGetComponent<PhysicalBehaviour>(out var component))
+				{
+					Debug.LogWarning($"Victim with ID {SerialisableVictims[i]} does not exist");
+				}
+				else if (!component || component == null)
+				{
+					Debug.LogWarning("Stab victim is null");
+				}
+				else
+				{
+					SoftConnect(component, component.GetComponent<Collider2D>(), 2f);
+				}
+			}
+		}
+		private void SoftConnect(PhysicalBehaviour otherPhys, Collider2D coll, float connectionStrength)
+		{
+			if ((bool)otherPhys && (bool)coll)
+			{
+				Vector2 hitPoint = GetHitPoint(coll);
+				FrictionJoint2D frictionJoint2D = otherPhys.gameObject.AddComponent<FrictionJoint2D>();
+				frictionJoint2D.autoConfigureConnectedAnchor = true;
+				frictionJoint2D.enableCollision = true;
+				frictionJoint2D.maxForce = connectionStrength;
+				frictionJoint2D.connectedBody = PhysicalBehaviour.rigidbody;
+				frictionJoint2D.maxTorque = connectionStrength;
+				frictionJoint2D.anchor = otherPhys.transform.InverseTransformPoint(hitPoint);
+				IgnoreCollisionStackController.IgnoreCollisionSubstituteMethod(coll, SharpCollider);
+				Stabbing stabbing = new Stabbing(PhysicalBehaviour, otherPhys, (transform.position - otherPhys.transform.position).normalized, hitPoint);
+				otherPhys.SendMessage("Stabbed", stabbing, SendMessageOptions.DontRequireReceiver);
+				otherPhys.SendMessage("Shot", new Shot((transform.position - otherPhys.transform.position).normalized, hitPoint, 65), SendMessageOptions.DontRequireReceiver);
+				otherPhys.SendMessage("Shot", new Shot((transform.position - otherPhys.transform.position).normalized, hitPoint, 75), SendMessageOptions.DontRequireReceiver);
+				if (ShouldSlice && UnityEngine.Random.value > 1 - SliceChance)
 				{
 					if (SliceOnlyDeads)
 					{
-                        if (otherPhys.gameObject.TryGetComponent(out LimbBehaviour limbBehaviour))
-                        {
-                            if (limbBehaviour.Health <= 0)
-                            {
-                                otherPhys.SendMessage("Slice");
-                            }
-                        }
-                    }
+						if (otherPhys.gameObject.TryGetComponent(out LimbBehaviour limbBehaviour))
+						{
+							if (limbBehaviour.Health <= 0)
+							{
+								otherPhys.SendMessage("Slice");
+							}
+						}
+					}
 					else
 					{
-                        otherPhys.SendMessage("Slice");
-                    }
+						otherPhys.SendMessage("Slice");
+					}
 				}
-                gameObject.SendMessage("Lodged", stabbing, SendMessageOptions.DontRequireReceiver);
-                softConnections.Add(otherPhys, new SoftConnection(frictionJoint2D, otherPhys, coll));
-            }
-        }
-        private Vector2 GetHitPoint(Collider2D coll)
-        {
-            Vector2 position = coll.ClosestPoint(transform.position);
-            return SharpCollider.ClosestPoint(position);
-        }
-    }
+				gameObject.SendMessage("Lodged", stabbing, SendMessageOptions.DontRequireReceiver);
+				softConnections.Add(otherPhys, new SoftConnection(frictionJoint2D, otherPhys, coll));
+			}
+		}
+		private Vector2 GetHitPoint(Collider2D coll)
+		{
+			Vector2 position = coll.ClosestPoint(transform.position);
+			return SharpCollider.ClosestPoint(position);
+		}
+	}
 
-    public class UseSeconder : MonoBehaviour
+	public class UseSeconder : MonoBehaviour
 	{
 
 	}
@@ -2677,33 +2711,33 @@ namespace Utility01
 	{
 		public float TimeFactor = 1f;
 		public Rigidbody2D rb;
-        public Vector2 UnscaledVelocity;
-        public float UnscaledAngularVelocity;
-        public Vector2? PrevVelocity;
+		public Vector2 UnscaledVelocity;
+		public float UnscaledAngularVelocity;
+		public Vector2? PrevVelocity;
 		public float? PrevAngularVelocity;
 		private void Start()
 		{
 			rb = gameObject.GetComponent<Rigidbody2D>();
-            UnscaledVelocity = rb.velocity;
-            UnscaledAngularVelocity = rb.angularVelocity;
-        }
+			UnscaledVelocity = rb.velocity;
+			UnscaledAngularVelocity = rb.angularVelocity;
+		}
 		private void FixedUpdate()
 		{
-			if(PrevVelocity != null)
+			if (PrevVelocity != null)
 			{
-                var acc = rb.velocity - PrevVelocity.Value;
-                var angularAcc = rb.angularVelocity - PrevAngularVelocity.Value;
-                PrevVelocity = rb.velocity = UnscaledVelocity * TimeFactor;
-                PrevAngularVelocity = rb.angularVelocity = UnscaledAngularVelocity * TimeFactor;
-                UnscaledVelocity += acc;
-                UnscaledAngularVelocity += angularAcc;
-            }
-            else
-            {
-                PrevVelocity = rb.velocity = UnscaledVelocity * TimeFactor;
-                PrevAngularVelocity = rb.angularVelocity = UnscaledAngularVelocity * TimeFactor;
-            }
-        }
+				var acc = rb.velocity - PrevVelocity.Value;
+				var angularAcc = rb.angularVelocity - PrevAngularVelocity.Value;
+				PrevVelocity = rb.velocity = UnscaledVelocity * TimeFactor;
+				PrevAngularVelocity = rb.angularVelocity = UnscaledAngularVelocity * TimeFactor;
+				UnscaledVelocity += acc;
+				UnscaledAngularVelocity += angularAcc;
+			}
+			else
+			{
+				PrevVelocity = rb.velocity = UnscaledVelocity * TimeFactor;
+				PrevAngularVelocity = rb.angularVelocity = UnscaledAngularVelocity * TimeFactor;
+			}
+		}
 	}
 	public class TimeFreezer : MonoBehaviour
 	{
@@ -2728,7 +2762,7 @@ namespace Utility01
 		}
 		public void FixedUpdate()
 		{
-			for(int i = 0; i < bodyInfos.Count; i++)
+			for (int i = 0; i < bodyInfos.Count; i++)
 			{
 				if (bodyInfos.Select(b => b.Item1).ToArray()[i] == null)
 				{
@@ -2769,21 +2803,21 @@ namespace Utility01
 		{
 			try
 			{
-                if (bodyInfos.Select(b => b.Item1).Contains(other.attachedRigidbody))
-                {
-                    var info = bodyInfos.Where(b => b.Item1 == other.attachedRigidbody).First().Item2;
-                    other.attachedRigidbody.angularVelocity = info.UnscaledAngularVelocity * EXIT_DUMB;
-                    other.attachedRigidbody.velocity = info.UnscaledVelocity * EXIT_DUMB;
-                    //other.attachedRigidbody.gravityScale = info.GravityScale;
-                    bodyInfos.RemoveAt(bodyInfos.Select(b => b.Item1).ToList().IndexOf(other.attachedRigidbody));
-                }
-            }
+				if (bodyInfos.Select(b => b.Item1).Contains(other.attachedRigidbody))
+				{
+					var info = bodyInfos.Where(b => b.Item1 == other.attachedRigidbody).First().Item2;
+					other.attachedRigidbody.angularVelocity = info.UnscaledAngularVelocity * EXIT_DUMB;
+					other.attachedRigidbody.velocity = info.UnscaledVelocity * EXIT_DUMB;
+					//other.attachedRigidbody.gravityScale = info.GravityScale;
+					bodyInfos.RemoveAt(bodyInfos.Select(b => b.Item1).ToList().IndexOf(other.attachedRigidbody));
+				}
+			}
 			catch { }
 		}
 		public void Ignore(Collider2D collider2D, bool ignore = true)
 		{
 			Physics2D.IgnoreCollision(collider2D, gameObject.GetComponent<Collider2D>(), ignore);
-        }
+		}
 	}
 	public class AimToMouse : MonoBehaviour
 	{
@@ -2877,10 +2911,10 @@ namespace Utility01
 			Destroy(this);
 		}
 	}
-    public class LimbShotMultiplier : MonoBehaviour
-    {
-        public PersonBehaviour Person;
-        public LimbBehaviour LimbBehaviour;
+	public class LimbShotMultiplier : MonoBehaviour
+	{
+		public PersonBehaviour Person;
+		public LimbBehaviour LimbBehaviour;
 		public float Multiplier;
 		private void Start()
 		{
@@ -2898,125 +2932,125 @@ namespace Utility01
 				LimbBehaviour.SetField("shotHeat", value);
 			}
 		}
-        public void Shot(Shot shot)
-        {
-            if (LimbBehaviour.ImmuneToDamage)
-            {
-                return;
-            }
-            shot.damage /= (float)typeof(LimbBehaviour).GetMethod("GetMassStrengthRatio", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(LimbBehaviour, new object[] { });
-            shot.damage *= Utility.GetPreferences().FragilityMultiplier * Multiplier;
-            if (LimbBehaviour.IsAndroid)
-            {
-                if (shot.damage < 40f)
-                {
-                    return;
-                }
-                shot.damage *= 0.2f;
-            }
-            else
-            {
-                shotHeat += 1f;
-            }
-            if (LimbBehaviour.HasLungs && !LimbBehaviour.IsAndroid && UnityEngine.Random.value > 0.9f)
-            {
-                LimbBehaviour.LungsPunctured = true;
-            }
-            bool flag = LimbBehaviour.IsWorldPointInVitalPart(shot.point, 0.114285715f) && UnityEngine.Random.value > 0.05f;
-            float num = (flag ? 7f : 0.1f) * shot.damage;
-            if (!Utility.GetPreferences().GorelessMode && Utility.GetPreferences().ChunkyShotParticles && LimbBehaviour.Person.PoolableImpactEffect && (double)LimbBehaviour.PhysicalBehaviour.BurnProgress < 0.6 && LimbBehaviour.SkinMaterialHandler.AcidProgress < 0.7f && num > LimbBehaviour.Person.ImpactEffectShotDamageThreshold && UnityEngine.Random.value > 0.8f)
-            {
-                GameObject gameObject = PoolGenerator.Instance.RequestPrefab(LimbBehaviour.Person.PoolableImpactEffect, shot.point);
-                if (gameObject)
-                {
-                    gameObject.transform.right = shot.normal;
-                }
-            }
-            if (LimbBehaviour.NodeBehaviour.IsConnectedToRoot)
-            {
-                LimbBehaviour.Person.AdrenalineLevel += 0.5f;
-                if (!LimbBehaviour.IsAndroid && !LimbBehaviour.IsZombie)
-                {
-                    LimbBehaviour.Person.ShockLevel += num * UnityEngine.Random.value * 0.0025f;
-                    LimbBehaviour.Person.Wince(300f);
-                    LimbBehaviour.Numbness = 1f;
-                    if (UnityEngine.Random.value * LimbBehaviour.Vitality > 0.9f && !LimbBehaviour.IsParalysed)
-                    {
-                        LimbBehaviour.Person.AddPain(UnityEngine.Random.value * 2f);
-                    }
-                    if (num > 5f * UnityEngine.Random.value)
-                    {
-                        if (shot.normal.x > 0f == LimbBehaviour.Person.transform.localScale.x > 0f)
-                        {
-                            LimbBehaviour.Person.DesiredWalkingDirection -= UnityEngine.Random.value * 2f;
-                        }
-                        else
-                        {
-                            LimbBehaviour.Person.DesiredWalkingDirection += UnityEngine.Random.value * 2f;
-                        }
-                    }
-                    LimbBehaviour.Person.SendMessage("Shot", shot);
-                }
-                if (LimbBehaviour.HasBrain && !LimbBehaviour.IsAndroid && flag)
-                {
-                    if (LimbBehaviour.IsZombie && UnityEngine.Random.value > 0.2f)
-                    {
-                        return;
-                    }
-                    if (UnityEngine.Random.value > 0.5f)
-                    {
-                        LimbBehaviour.Health = 0f;
-                    }
-                    if (UnityEngine.Random.value > 0.5f)
-                    {
-                        LimbBehaviour.Person.Consciousness = 0f;
-                    }
-                }
-            }
-            if (shot.CanCrush && Utility.GetPreferences().LimbCrushing && shot.damage > 149f && Mathf.Clamp((shot.damage - 149f) * 0.005f, 0.3f, 0.8f) > UnityEngine.Random.value)
-            {
-                if (Utility.GetPreferences().StopAnimationOnDamage)
-                {
-                    LimbBehaviour.Person.OverridePoseIndex = -1;
-                }
+		public void Shot(Shot shot)
+		{
+			if (LimbBehaviour.ImmuneToDamage)
+			{
+				return;
+			}
+			shot.damage /= (float)typeof(LimbBehaviour).GetMethod("GetMassStrengthRatio", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(LimbBehaviour, new object[] { });
+			shot.damage *= Utility.GetPreferences().FragilityMultiplier * Multiplier;
+			if (LimbBehaviour.IsAndroid)
+			{
+				if (shot.damage < 40f)
+				{
+					return;
+				}
+				shot.damage *= 0.2f;
+			}
+			else
+			{
+				shotHeat += 1f;
+			}
+			if (LimbBehaviour.HasLungs && !LimbBehaviour.IsAndroid && UnityEngine.Random.value > 0.9f)
+			{
+				LimbBehaviour.LungsPunctured = true;
+			}
+			bool flag = LimbBehaviour.IsWorldPointInVitalPart(shot.point, 0.114285715f) && UnityEngine.Random.value > 0.05f;
+			float num = (flag ? 7f : 0.1f) * shot.damage;
+			if (!Utility.GetPreferences().GorelessMode && Utility.GetPreferences().ChunkyShotParticles && LimbBehaviour.Person.PoolableImpactEffect && (double)LimbBehaviour.PhysicalBehaviour.BurnProgress < 0.6 && LimbBehaviour.SkinMaterialHandler.AcidProgress < 0.7f && num > LimbBehaviour.Person.ImpactEffectShotDamageThreshold && UnityEngine.Random.value > 0.8f)
+			{
+				GameObject gameObject = PoolGenerator.Instance.RequestPrefab(LimbBehaviour.Person.PoolableImpactEffect, shot.point);
+				if (gameObject)
+				{
+					gameObject.transform.right = shot.normal;
+				}
+			}
+			if (LimbBehaviour.NodeBehaviour.IsConnectedToRoot)
+			{
+				LimbBehaviour.Person.AdrenalineLevel += 0.5f;
+				if (!LimbBehaviour.IsAndroid && !LimbBehaviour.IsZombie)
+				{
+					LimbBehaviour.Person.ShockLevel += num * UnityEngine.Random.value * 0.0025f;
+					LimbBehaviour.Person.Wince(300f);
+					LimbBehaviour.Numbness = 1f;
+					if (UnityEngine.Random.value * LimbBehaviour.Vitality > 0.9f && !LimbBehaviour.IsParalysed)
+					{
+						LimbBehaviour.Person.AddPain(UnityEngine.Random.value * 2f);
+					}
+					if (num > 5f * UnityEngine.Random.value)
+					{
+						if (shot.normal.x > 0f == LimbBehaviour.Person.transform.localScale.x > 0f)
+						{
+							LimbBehaviour.Person.DesiredWalkingDirection -= UnityEngine.Random.value * 2f;
+						}
+						else
+						{
+							LimbBehaviour.Person.DesiredWalkingDirection += UnityEngine.Random.value * 2f;
+						}
+					}
+					LimbBehaviour.Person.SendMessage("Shot", shot);
+				}
+				if (LimbBehaviour.HasBrain && !LimbBehaviour.IsAndroid && flag)
+				{
+					if (LimbBehaviour.IsZombie && UnityEngine.Random.value > 0.2f)
+					{
+						return;
+					}
+					if (UnityEngine.Random.value > 0.5f)
+					{
+						LimbBehaviour.Health = 0f;
+					}
+					if (UnityEngine.Random.value > 0.5f)
+					{
+						LimbBehaviour.Person.Consciousness = 0f;
+					}
+				}
+			}
+			if (shot.CanCrush && Utility.GetPreferences().LimbCrushing && shot.damage > 149f && Mathf.Clamp((shot.damage - 149f) * 0.005f, 0.3f, 0.8f) > UnityEngine.Random.value)
+			{
+				if (Utility.GetPreferences().StopAnimationOnDamage)
+				{
+					LimbBehaviour.Person.OverridePoseIndex = -1;
+				}
 				LimbBehaviour.StartCoroutine("CrushNextFrame");
-            }
-            else if (shotHeat > 5f && UnityEngine.Random.value > 0.35f)
-            {
-                if (LimbBehaviour.HasJoint && UnityEngine.Random.value > 0.8f)
-                {
-                    LimbBehaviour.Slice();
-                }
-                else if (shot.CanCrush && Utility.GetPreferences().LimbCrushing)
-                {
-                    if (Utility.GetPreferences().StopAnimationOnDamage)
-                    {
-                        LimbBehaviour.Person.OverridePoseIndex = -1;
-                    }
-                    LimbBehaviour.StartCoroutine("CrushNextFrame");
-                }
-            }
-            if (LimbBehaviour.IsZombie || UnityEngine.Random.value < 0.01f)
-            {
-                LimbBehaviour.Damage(num * LimbBehaviour.ShotDamageMultiplier * 0.01f);
-            }
-            else
-            {
-                if (!LimbBehaviour.IsAndroid)
-                {
-                    LimbBehaviour.CirculationBehaviour.InternalBleedingIntensity += num;
-                    if (flag)
-                    {
-                        LimbBehaviour.CirculationBehaviour.InternalBleedingIntensity += 5f;
-                    }
-                }
-                LimbBehaviour.Damage(Mathf.Min(LimbBehaviour.InitialHealth / 2f, num * LimbBehaviour.ShotDamageMultiplier * 2f));
-            }
-            float b = shot.damage * 0.1f;
-            LimbBehaviour.SkinMaterialHandler.AddDamagePoint(DamageType.Bullet, shot.point, Mathf.Max(50f, b));
-        }
-    }
-    public class ForceAngle : MonoBehaviour
+			}
+			else if (shotHeat > 5f && UnityEngine.Random.value > 0.35f)
+			{
+				if (LimbBehaviour.HasJoint && UnityEngine.Random.value > 0.8f)
+				{
+					LimbBehaviour.Slice();
+				}
+				else if (shot.CanCrush && Utility.GetPreferences().LimbCrushing)
+				{
+					if (Utility.GetPreferences().StopAnimationOnDamage)
+					{
+						LimbBehaviour.Person.OverridePoseIndex = -1;
+					}
+					LimbBehaviour.StartCoroutine("CrushNextFrame");
+				}
+			}
+			if (LimbBehaviour.IsZombie || UnityEngine.Random.value < 0.01f)
+			{
+				LimbBehaviour.Damage(num * LimbBehaviour.ShotDamageMultiplier * 0.01f);
+			}
+			else
+			{
+				if (!LimbBehaviour.IsAndroid)
+				{
+					LimbBehaviour.CirculationBehaviour.InternalBleedingIntensity += num;
+					if (flag)
+					{
+						LimbBehaviour.CirculationBehaviour.InternalBleedingIntensity += 5f;
+					}
+				}
+				LimbBehaviour.Damage(Mathf.Min(LimbBehaviour.InitialHealth / 2f, num * LimbBehaviour.ShotDamageMultiplier * 2f));
+			}
+			float b = shot.damage * 0.1f;
+			LimbBehaviour.SkinMaterialHandler.AddDamagePoint(DamageType.Bullet, shot.point, Mathf.Max(50f, b));
+		}
+	}
+	public class ForceAngle : MonoBehaviour
 	{
 		private float TargetAngle;
 		private LimbBehaviour LimbToCopy;
@@ -3230,10 +3264,10 @@ namespace Utility01
 		public bool PointOffset = false;
 		private void OnEnable()
 		{
-			if(Parent != null)
+			if (Parent != null)
 			{
-                UpdateAll();
-            }
+				UpdateAll();
+			}
 		}
 		private void Update()
 		{
@@ -3241,43 +3275,43 @@ namespace Utility01
 		}
 		private void UpdateAll()
 		{
-            if (Parent == null)
-            {
-                if (!destroyed)
-                {
-                    StartCoroutine(DestroyAction());
-                }
-            }
-            else
-            {
-                if (!Parent.gameObject.activeSelf && DestroyOnParentDisable)
-                {
-                    gameObject.Destroy();
-                }
-                if (!PointOffset)
+			if (Parent == null)
+			{
+				if (!destroyed)
 				{
-                    transform.position = Parent.position + transform.TransformVector(positionOffset);
-                }
+					StartCoroutine(DestroyAction());
+				}
+			}
+			else
+			{
+				if (!Parent.gameObject.activeSelf && DestroyOnParentDisable)
+				{
+					gameObject.Destroy();
+				}
+				if (!PointOffset)
+				{
+					transform.position = Parent.position + transform.TransformVector(positionOffset);
+				}
 				else
 				{
 					transform.position = Parent.TransformPoint(positionOffset) + new Vector3(0, 0, positionOffset.z);
 				}
 				if (ScaleSync)
 				{
-                    var scale = Parent.localScale * scaleOffset;
+					var scale = Parent.localScale * scaleOffset;
 					if (needScaleLimits)
 					{
-                        scale = new Vector3(scale.x > scaleLimits.max.x ? scaleLimits.max.x : scale.x, scale.y > scaleLimits.max.y ? scaleLimits.max.y : scale.y, scale.z > scaleLimits.max.z ? scaleLimits.max.z : scale.z);
-                        scale = new Vector3(scale.x < scaleLimits.min.x ? scaleLimits.min.x : scale.x, scale.y < scaleLimits.min.y ? scaleLimits.min.y : scale.y, scale.z < scaleLimits.min.z ? scaleLimits.min.z : scale.z);
-                    }
+						scale = new Vector3(scale.x > scaleLimits.max.x ? scaleLimits.max.x : scale.x, scale.y > scaleLimits.max.y ? scaleLimits.max.y : scale.y, scale.z > scaleLimits.max.z ? scaleLimits.max.z : scale.z);
+						scale = new Vector3(scale.x < scaleLimits.min.x ? scaleLimits.min.x : scale.x, scale.y < scaleLimits.min.y ? scaleLimits.min.y : scale.y, scale.z < scaleLimits.min.z ? scaleLimits.min.z : scale.z);
+					}
 					transform.localScale = scale;
-                }
-                if (RotationSync)
-                {
-                    transform.eulerAngles = new Vector3(Parent.eulerAngles.x, Parent.eulerAngles.y, Parent.eulerAngles.z + rotationOffset);
-                }
-            }
-        }
+				}
+				if (RotationSync)
+				{
+					transform.eulerAngles = new Vector3(Parent.eulerAngles.x, Parent.eulerAngles.y, Parent.eulerAngles.z + rotationOffset);
+				}
+			}
+		}
 		private IEnumerator DestroyAction()
 		{
 			destroyed = true;
