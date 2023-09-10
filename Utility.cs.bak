@@ -1273,14 +1273,10 @@ namespace Utility01
 		public virtual void OnInitialized()
 		{
 		}
-		public virtual bool CanAttach(Collision2D collision2D)
-		{
-			return true;
-		}
 		private void OnCollisionEnter2D(Collision2D collision)
 		{
 
-			if (!collision.gameObject.IsAlreadyAttached() && CanAttach(collision))
+			if (!collision.gameObject.IsAlreadyAttached())
 			{
 				if (collision.gameObject.TryGetComponent<LimbBehaviour>(out LimbBehaviour limb))
 				{
@@ -1515,34 +1511,14 @@ namespace Utility01
 			{
 				Utility.Log(LogType.Exception, "Problem with ReabilityLimb " + limbBehaviour.name + " " + Exeption);
 			}
-			var callbackOfLimb = limbBehaviour.gameObject.GetComponent<RegrowthModuleCallBack>();
-			if (callbackOfLimb != null)
-			{
-				var dInfo = callbackOfLimb.disintigratesInfo;
-				foreach(var collider in dInfo.colliders)
-				{
-					if(collider != null)
-					{
-						collider.enabled = true;
-					}
-				}
-				foreach(var renderer in dInfo.renderers)
-				{
-					if(renderer != null)
-					{
-						renderer.enabled = true;
-					}
-				}
-				foreach(var rb in dInfo.rbs)
-				{
-					if(rb != null)
-					{
-						rb.simulated = true;
-					}
-				}
-			}
 			limbBehaviour.gameObject.SetActive(true); // убеждаемся в том что лимба включена, в случае краша она отключается
+			foreach (var colliider in limbBehaviour.PhysicalBehaviour.colliders) // врубаем коллайдеры если они выключены
+			{
+				colliider.enabled = true;
+			}
+			limbBehaviour.SkinMaterialHandler.renderer.enabled = true; // врубаем рендерер
 			limbBehaviour.PhysicalBehaviour.isDisintegrated = false;
+			limbBehaviour.PhysicalBehaviour.rigidbody.simulated = true;
 			if (limbBehaviour.gameObject.TryGetComponent(out FreezeBehaviour freezeBehaviour))
 			{
 				freezeBehaviour.Destroy();
@@ -2025,17 +2001,11 @@ namespace Utility01
 		{
 			public RegrowthModule RegrowthModule;
 			public LimbBehaviour LimbBehaviour;
-			public DisintigratesInfo disintigratesInfo;
 			private void Start()
 			{
 				LimbBehaviour = gameObject.GetComponent<LimbBehaviour>();
-                LimbBehaviour.PhysicalBehaviour.OnDisintegration += PhysicalBehaviour_OnDisintegration;
 			}
-            private void PhysicalBehaviour_OnDisintegration(object sender, EventArgs e)
-            {
-				disintigratesInfo = new DisintigratesInfo(LimbBehaviour);
-            }
-        }
+		}
 		#endregion
 		#region Other
 		private LimbInformation GetLimbInformation(LimbBehaviour limbBehaviour)
@@ -2053,20 +2023,6 @@ namespace Utility01
 		public void RepositingLimb(LimbBehaviour limbBehaviour)
 		{
 			StartCoroutine(RepositingLimbCoroutine(limbBehaviour));
-		}
-		public struct DisintigratesInfo
-		{
-			public LimbBehaviour limbBehaviour;
-			public Collider2D[] colliders;
-			public Renderer[] renderers;
-			public Rigidbody2D[] rbs;
-			public DisintigratesInfo(LimbBehaviour limbBehaviour)
-			{
-				this.limbBehaviour = limbBehaviour;
-				colliders = limbBehaviour.gameObject.GetComponentsInChildren<Collider2D>().Where(c => c.enabled).ToArray();
-				renderers = limbBehaviour.gameObject.GetComponentsInChildren<Renderer>().Where(r => r.enabled).ToArray();
-				rbs = limbBehaviour.gameObject.GetComponentsInChildren<Rigidbody2D>().Where(r => r.simulated).ToArray();
-            }
 		}
 		#endregion
 		#region Controllers
