@@ -305,6 +305,18 @@ namespace Utility01
                 MulltAction?.Invoke(i);
             }
         }
+        public static Vector3 Clamp(this Vector3 value, Vector3 min, Vector3 max)
+        {
+            var scaleLimits = new VectorLimits()
+            {
+                max = max,
+                min = min
+            };
+            Vector3 scale = value;
+            scale = new Vector3(scale.x > scaleLimits.max.x ? scaleLimits.max.x : scale.x, scale.y > scaleLimits.max.y ? scaleLimits.max.y : scale.y, scale.z > scaleLimits.max.z ? scaleLimits.max.z : scale.z);
+            scale = new Vector3(scale.x < scaleLimits.min.x ? scaleLimits.min.x : scale.x, scale.y < scaleLimits.min.y ? scaleLimits.min.y : scale.y, scale.z < scaleLimits.min.z ? scaleLimits.min.z : scale.z);
+            return scale;
+        }
         public static Vector3 GetModuleVector(this Vector3 vector)
         {
             return new Vector3(Math.Abs(vector.x), Math.Abs(vector.y), Math.Abs(vector.z));
@@ -621,6 +633,14 @@ namespace Utility01
             }
             return list;
 
+        }
+        public static Collider2D[] GetPersonColliders(this PersonBehaviour personBehaviour, bool withGrips = true)
+        {
+            var grips = personBehaviour.gameObject.GetComponentsInChildren<GripBehaviour>();
+            var gripsColliders = grips.Where(g => g.CurrentlyHolding != null).Where(g => g.CurrentlyHolding.gameObject.GetComponent<Collider2D>()).Select(g => g.CurrentlyHolding.gameObject.GetComponent<Collider2D>());
+            var personColliders = personBehaviour.gameObject.GetComponentsInChildren<Collider2D>();
+            if (withGrips) return personColliders.Concat(gripsColliders).ToArray();
+            return personColliders;
         }
         public static PointDebuggerCircle DrawCircle(this GameObject gameObject, float radius = 0.3f)
         {
@@ -1059,7 +1079,7 @@ namespace Utility01
             var mouthPoint = new Vector2(0.15f, -0.1f);
             if (collision2D.gameObject.TryGetComponent(out LimbBehaviour limbBehaviour))
             {
-                if(AttachemntsUtils.GetLimbClassification(limbBehaviour) == AttachmentAttribute.LimbClassification.Head)
+                if (AttachemntsUtils.GetLimbClassification(limbBehaviour) == AttachmentAttribute.LimbClassification.Head)
                 {
                     var colliders = Physics2D.OverlapCircleAll(collision2D.transform.TransformPoint(mouthPoint), radius * Mathf.Abs(collision2D.transform.lossyScale.x));
                     if (colliders.Contains(collision2D.otherCollider))
@@ -1553,6 +1573,8 @@ namespace Utility01
                 {
                     if (rb != null)
                     {
+                        rb.velocity = Vector2.zero;
+                        rb.angularVelocity = 0;
                         rb.simulated = true;
                     }
                 }
@@ -1564,6 +1586,10 @@ namespace Utility01
                 freezeBehaviour.Destroy();
             }
             limbBehaviour.PhysicalBehaviour.rigidbody.bodyType = RigidbodyType2D.Dynamic;
+            limbBehaviour.SkinMaterialHandler.damagePoints = new Vector4[limbBehaviour.SkinMaterialHandler.damagePoints.Length];
+            limbBehaviour.SkinMaterialHandler.damagePointTimeStamps = new float[limbBehaviour.SkinMaterialHandler.damagePointTimeStamps.Length];
+            limbBehaviour.SkinMaterialHandler.currentDamagePointCount = 0;
+            limbBehaviour.SkinMaterialHandler.Sync();
             ClearOnCollisionBuffer(limbBehaviour.PhysicalBehaviour);
             if (controller != null)
             {
@@ -2543,6 +2569,30 @@ namespace Utility01
     }
     #endregion
     #region OtherClasses
+    public class float01
+    {
+        public float value
+        {
+            get
+            {
+                return Mathf.Clamp01(m_value);
+            }
+            set
+            {
+                m_value = value;
+            }
+        }
+        [SerializeField]
+        private float m_value;
+        public static implicit operator float01(float value)
+        {
+            return new float01 { value = value };
+        }
+        public static implicit operator float(float01 float01)
+        {
+            return float01.value;
+        }
+    }
     public class BladeSharp : MonoBehaviour, Messages.IOnBeforeSerialise, Messages.IOnAfterDeserialise
     {
         public class SoftConnection
@@ -2758,7 +2808,56 @@ namespace Utility01
             return SharpCollider.ClosestPoint(position);
         }
     }
-
+    public class BurnableSpriteObject : MonoBehaviour
+    {
+        public static Material burnMaterial = ModAPI.FindSpawnable("Crate").Prefab.GetComponent<SpriteRenderer>().material;
+        public PhysicalBehaviour referencePhys
+        {
+            get
+            {
+                return m_referencePhys;
+            }
+            set
+            {
+                if (value == null)
+                {
+                    isReference = false;
+                    return;
+                }
+                isReference = true;
+                m_referencePhys = value;
+            }
+        }
+        [SerializeField]
+        private PhysicalBehaviour m_referencePhys;
+        [SerializeField]
+        private bool isReference = false;
+        public float01 BurnProgress
+        {
+            get
+            {
+                if (isReference) return referencePhys.BurnProgress;
+                return m_burnProgress;
+            }
+            set
+            {
+                if (isReference) return;
+                m_burnProgress = value;
+            }
+        }
+        [SerializeField]
+        private float m_burnProgress;
+        private SpriteRenderer spriteRenderer;
+        private void Start()
+        {
+            spriteRenderer = gameObject.GetComponent<SpriteRenderer>();
+            spriteRenderer.material = burnMaterial;
+        }
+        private void Update()
+        {
+            spriteRenderer.material.SetFloat("_Progress", BurnProgress);
+        }
+    }
     public class UseSeconder : MonoBehaviour
     {
 
@@ -3284,6 +3383,11 @@ namespace Utility01
             }
         }
     }
+    public struct VectorLimits
+    {
+        public Vector3 max;
+        public Vector3 min;
+    }
     public class PseudoChild : MonoBehaviour
     {
         [SkipSerialisation]
@@ -3293,11 +3397,6 @@ namespace Utility01
         public Vector3 positionOffset;
         public float rotationOffset;
         public float scaleOffset = 1f;
-        public struct VectorLimits
-        {
-            public Vector3 max;
-            public Vector3 min;
-        }
         public VectorLimits ScaleLimits
         {
             get { return scaleLimits; }
@@ -3350,6 +3449,7 @@ namespace Utility01
                 }
                 if (!PointOffset)
                 {
+
                     transform.position = Parent.position + transform.TransformVector(positionOffset);
                 }
                 else
