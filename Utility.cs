@@ -2071,6 +2071,7 @@ namespace Utility01
             private void Start()
             {
                 LimbBehaviour = gameObject.GetComponent<LimbBehaviour>();
+                disintigratesInfo = new DisintigratesInfo(LimbBehaviour);
                 LimbBehaviour.PhysicalBehaviour.OnDisintegration += PhysicalBehaviour_OnDisintegration;
             }
             private void PhysicalBehaviour_OnDisintegration(object sender, EventArgs e)
