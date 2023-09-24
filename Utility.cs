@@ -190,6 +190,10 @@ namespace Utility01
                 AfterSpawn = afterSpawn
             };
         }
+        public static void GripAttach(GripBehaviour gripBehaviour, PhysicalBehaviour physicalBehaviour, Vector2 holdingPos)
+        {
+            typeof(GripBehaviour).GetMethod("Attach", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).Invoke(gripBehaviour, new object[] { physicalBehaviour, holdingPos });
+        }
         internal static Modification CreateModification<T>(SpawnableAsset originalItem, Sprite thumbnailOverride, Category categoryOverride, string nameOverride, string descriptionOverride, string nameToOrderByOverride, Action<T> afterSpawn) where T : Component
         {
             return new Modification()
@@ -202,6 +206,10 @@ namespace Utility01
                 ThumbnailOverride = thumbnailOverride,
                 AfterSpawn = (Instance) => afterSpawn.Invoke(Instance.GetOrAddComponent<T>())
             };
+        }
+        public static AdvancedLimbBehaviour Advanceinator(this LimbBehaviour limbBehaviour)
+        {
+            return (limbBehaviour as AdvancedLimbBehaviour);
         }
         internal static LimbBehaviour GetNearestLimb(this Vector2 vector, PersonBehaviour exclude = null, List<LimbBehaviour> limbBehaviours = null)
         {
@@ -258,6 +266,17 @@ namespace Utility01
                 }
             }
         }
+        /// <param name="xOffset">Sprite X Offset In Pixels</param>
+        /// <param name="yOffset">Sprite Y Offset In Pixels</param>
+        /// <returns></returns>
+        public static Sprite GetSlicedSprite(Texture2D texture, Rect rect, float pixelsPerUnit = 35, float xOffset = 0, float yOffset = 0)
+        {
+            Vector2 vec = Vector2.zero;
+            vec.x = 1 / rect.width * xOffset;
+            vec.y = 1 / rect.height * yOffset;
+            Sprite sprite = Sprite.Create(texture, rect, vec, pixelsPerUnit);
+            return sprite;
+        }
         internal static void HealLimb(this LimbBehaviour limb)
         {
             limb.PhysicalBehaviour.BurnProgress -= limb.PhysicalBehaviour.BurnProgress * 0.01f;
@@ -292,6 +311,16 @@ namespace Utility01
             }
             Action?.Invoke(SpriteObject);
             return SpriteObjectRenderer;
+        }
+        internal static SpriteRenderer CreateBurnableSpriteObject(this PhysicalBehaviour physicalBehaviour, Sprite Sprite, int order = -999)
+        {
+            var renderer = CreateSpriteObject(physicalBehaviour.transform, new Vector3(0, 0, 0), new Vector3(1, 1, 1), Sprite);
+            renderer.gameObject.GetOrAddComponent<BurnableSpriteObject>().referencePhys = physicalBehaviour;
+            if (order != -999)
+            {
+                renderer.sortingOrder = order;
+            }
+            return renderer;
         }
         internal static void BetterDestroy<T>(this GameObject Instance) where T : Component
         {
@@ -1555,6 +1584,7 @@ namespace Utility01
             if (callbackOfLimb != null)
             {
                 var dInfo = callbackOfLimb.disintigratesInfo;
+                if (!dInfo.collected) dInfo.Call();
                 foreach (var collider in dInfo.colliders)
                 {
                     if (collider != null)
@@ -2071,12 +2101,13 @@ namespace Utility01
             private void Start()
             {
                 LimbBehaviour = gameObject.GetComponent<LimbBehaviour>();
-                disintigratesInfo = new DisintigratesInfo(LimbBehaviour);
+                disintigratesInfo = gameObject.GetOrAddComponent<DisintigratesInfo>();
                 LimbBehaviour.PhysicalBehaviour.OnDisintegration += PhysicalBehaviour_OnDisintegration;
             }
             private void PhysicalBehaviour_OnDisintegration(object sender, EventArgs e)
             {
-                disintigratesInfo = new DisintigratesInfo(LimbBehaviour);
+
+                //disintigratesInfo.Call();
             }
         }
         #endregion
@@ -2097,18 +2128,27 @@ namespace Utility01
         {
             StartCoroutine(RepositingLimbCoroutine(limbBehaviour));
         }
-        public struct DisintigratesInfo
+        public class DisintigratesInfo : MonoBehaviour
         {
             public LimbBehaviour limbBehaviour;
-            public Collider2D[] colliders;
-            public Renderer[] renderers;
-            public Rigidbody2D[] rbs;
-            public DisintigratesInfo(LimbBehaviour limbBehaviour)
+            public List<Collider2D> colliders;
+            public List<Renderer> renderers;
+            public List<Rigidbody2D> rbs;
+            [SkipSerialisation]
+            public bool collected = false;
+            private void Start()
             {
-                this.limbBehaviour = limbBehaviour;
-                colliders = limbBehaviour.gameObject.GetComponentsInChildren<Collider2D>().Where(c => c.enabled).ToArray();
-                renderers = limbBehaviour.gameObject.GetComponentsInChildren<Renderer>().Where(r => r.enabled).ToArray();
-                rbs = limbBehaviour.gameObject.GetComponentsInChildren<Rigidbody2D>().Where(r => r.simulated).ToArray();
+                if (collected) return;
+
+                limbBehaviour = gameObject.GetComponent<LimbBehaviour>();
+                Call();
+            }
+            public void Call()
+            {
+                collected = true;
+                colliders = limbBehaviour.gameObject.GetComponentsInChildren<Collider2D>().Where(c => c.enabled).ToList();
+                renderers = limbBehaviour.gameObject.GetComponentsInChildren<Renderer>().Where(r => r.enabled).ToList();
+                rbs = limbBehaviour.gameObject.GetComponentsInChildren<Rigidbody2D>().Where(r => r.simulated).ToList();
             }
         }
         #endregion
@@ -2570,6 +2610,10 @@ namespace Utility01
     }
     #endregion
     #region OtherClasses
+    public class AdvancedLimbBehaviour : LimbBehaviour
+    {
+        public SpriteRenderer spriteRenderer => this.SkinMaterialHandler.renderer;
+    }
     public class float01
     {
         public float value
@@ -2594,7 +2638,232 @@ namespace Utility01
             return float01.value;
         }
     }
-    public class BladeSharp : MonoBehaviour, Messages.IOnBeforeSerialise, Messages.IOnAfterDeserialise
+    public class GripObjectCallbackBehaviour : MonoBehaviour, Messages.IOnGripped, Messages.IOnDrop
+    {
+        public UnityEvent<PersonBehaviour, GripBehaviour> onDrop = new UnityEvent<PersonBehaviour, GripBehaviour>();
+        public UnityEvent<PersonBehaviour, GripBehaviour> onGrip = new UnityEvent<PersonBehaviour, GripBehaviour>();
+
+        public void OnDrop(GripBehaviour formerGripper)
+        {
+            if (formerGripper.transform.root.TryGetComponent(out PersonBehaviour personBehaviour))
+            {
+                onDrop.Invoke(personBehaviour, formerGripper);
+            }
+        }
+
+        public void OnGripped(GripBehaviour gripper)
+        {
+            if (gripper.transform.root.TryGetComponent(out PersonBehaviour personBehaviour))
+            {
+                onGrip.Invoke(personBehaviour, gripper);
+            }
+        }
+    }
+    public class InventoryContainerBehaviour : MonoBehaviour
+    {
+        public Item[] items
+        {
+            get
+            {
+                return itemsContainer.items;
+            }
+            set
+            {
+                itemsContainer.items = value;
+            }
+        }
+        public Items itemsContainer;
+        public int targetItemIndex;
+        public void Start()
+        {
+
+        }
+        public bool Push(Item item)
+        {
+            var targetItems = items.Where(i => i.guid == item.guid && i.countItem < i.maxCount).ToList();
+            if (targetItems.Count == 0) return false;
+
+            int index = items.ToList().IndexOf(targetItems.First());
+            items[index].countItem++;
+            return true;
+        }
+        public bool Take()
+        {
+            if (items[targetItemIndex].countItem - 1 >= 0)
+            {
+                var item = items[targetItemIndex];
+                item.countItem--;
+                items[targetItemIndex] = item;
+                return true;
+            }
+            return false;
+        }
+        public struct Items
+        {
+            public Item[] items;
+            public Items(Item[] items)
+            {
+                this.items = items;
+            }
+        }
+        public struct Item
+        {
+            public string name;
+            public string guid;
+            [SkipSerialisation]
+            public SpawnableAsset spawnableAsset;
+            [SkipSerialisation]
+            public Action<GameObject> afterSpawn;
+            public bool isPicked;
+            public int countItem;
+            public int maxCount;
+            public float offsetRotation;
+            public Vector2 holdingPos;
+            public Item(string name, SpawnableAsset prefab, Action<GameObject> afterSpawn, float offsetRotation, Vector2 holdingPos, int count)
+            {
+                this.name = name;
+                guid = name;
+                this.spawnableAsset = prefab;
+                this.afterSpawn = afterSpawn;
+                this.countItem = count;
+                maxCount = count;
+                isPicked = false;
+                this.offsetRotation = offsetRotation;
+                this.holdingPos = holdingPos;
+            }
+        }
+        public class InvenoryItemBehaviour : MonoBehaviour, Messages.IOnDrop, Messages.IOnGripped
+        {
+            public Item information;
+            [SkipSerialisation]
+            public bool formed = false;
+            private void Start()
+            {
+                if (!formed) Form();
+            }
+            public void Form()
+            {
+                if (formed) return;
+                formed = true;
+                information.afterSpawn.Invoke(gameObject);
+            }
+            public void OnDrop(GripBehaviour formerGripper)
+            {
+                if (formerGripper.gameObject.TryGetComponent(out InventoryPickerBehaviour inventoryPickerBehaviour))
+                {
+                    if (inventoryPickerBehaviour.currentItem.HasValue)
+                    {
+                        if (inventoryPickerBehaviour.currentItem.Value.guid == information.guid)
+                        {
+                            inventoryPickerBehaviour.currentItem = null;
+                            inventoryPickerBehaviour.createdObject = null;
+                        }
+                    }
+                }
+            }
+
+            public void OnGripped(GripBehaviour gripper)
+            {
+                if (gripper.gameObject.TryGetComponent(out InventoryPickerBehaviour inventoryPickerBehaviour))
+                {
+                    inventoryPickerBehaviour.currentItem = information;
+                    inventoryPickerBehaviour.createdObject = gameObject;
+                }
+            }
+        }
+    }
+    public class InventoryPickerBehaviour : MonoBehaviour
+    {
+        public KeyCode targetKeycode = KeyCode.H;
+        public GripBehaviour gripBehaviour;
+        public PhysicalBehaviour physicalBehaviour;
+        [SkipSerialisation]
+        public GameObject createdObject;
+        public InventoryContainerBehaviour.Item? currentItem = null;
+        public UnityEvent<GameObject> onPush = new UnityEvent<GameObject>();
+        public Func<bool> canTake = () => true;
+        public Func<bool> canPush = () => true;
+        public float findRadius = 0.5f;
+
+        private void Start()
+        {
+            gripBehaviour = gameObject.GetComponent<GripBehaviour>();
+            var gripCallback = gameObject.GetOrAddComponent<GripObjectCallbackBehaviour>();
+            gripCallback.onDrop.AddListener((p, g) => Drop(p, g));
+            gripCallback.onGrip.AddListener((p, g) => Grip(p, g));
+            physicalBehaviour = gameObject.GetComponent<PhysicalBehaviour>();
+        }
+        public void Grip(PersonBehaviour personBehaviour, GripBehaviour gripBehaviour)
+        {
+
+        }
+        public void Drop(PersonBehaviour personBehaviour, GripBehaviour gripBehaviour)
+        {
+
+        }
+        public void TakeObject()
+        {
+            if (!canTake.Invoke()) return;
+            var inventories = Physics2D.OverlapCircleAll(gameObject.transform.position, findRadius).Where(c => c.gameObject.GetComponent<InventoryContainerBehaviour>()).Select(c => c.gameObject.GetComponent<InventoryContainerBehaviour>()).ToArray();
+            foreach (var inv in inventories)
+            {
+                if (inv.Take())
+                {
+                    if (gripBehaviour.CurrentlyHolding != null) gripBehaviour.DropObject();
+                    currentItem = inv.items[inv.targetItemIndex];
+                    createdObject = Utility.GetPerformedMod(currentItem.Value.spawnableAsset, gameObject.transform.position);
+                    var invItemBeh = createdObject.GetOrAddComponent<InventoryContainerBehaviour.InvenoryItemBehaviour>();
+                    invItemBeh.information = currentItem.Value;
+                    invItemBeh.Form();
+                    var direction = gripBehaviour.transform.root.localScale.x > 0 ? 1 : -1;
+                    createdObject.transform.localScale = new Vector3(createdObject.transform.localScale.x * direction, createdObject.transform.localScale.y);
+                    createdObject.transform.position = gripBehaviour.gameObject.transform.position;
+                    var rotation = gripBehaviour.gameObject.transform.rotation;
+                    rotation.eulerAngles = new Vector3(rotation.eulerAngles.x, rotation.eulerAngles.y, rotation.eulerAngles.z + (currentItem.Value.offsetRotation * direction));
+                    createdObject.transform.rotation = rotation;
+                    Utility.GripAttach(gripBehaviour, createdObject.GetComponent<PhysicalBehaviour>(), currentItem.Value.holdingPos);
+                }
+                break;
+            }
+
+        }
+        public void PushObject()
+        {
+            if (!canPush.Invoke()) return;
+            if (currentItem == null) return;
+
+            var inventories = Physics2D.OverlapCircleAll(gameObject.transform.position, findRadius).Where(c => c.gameObject.GetComponent<InventoryContainerBehaviour>()).Select(c => c.gameObject.GetComponent<InventoryContainerBehaviour>()).ToArray();
+            bool pushed = false;
+            if (!(gripBehaviour.CurrentlyHolding.gameObject == createdObject && createdObject != null)) return;
+            foreach (var inv in inventories)
+            {
+                if (inv.Push(currentItem.Value))
+                {
+                    pushed = true;
+                    break;
+                }
+            }
+            if (!pushed) return;
+            onPush.Invoke(createdObject);
+            createdObject.Destroy();
+            currentItem = null;
+        }
+        private void Update()
+        {
+            if (Input.GetKeyDown(targetKeycode) && SelectionController.Main.SelectedObjects.Contains(physicalBehaviour))
+            {
+                if (gripBehaviour.CurrentlyHolding != null && gripBehaviour.CurrentlyHolding.gameObject == createdObject)
+                {
+                    PushObject();
+                }
+                else
+                {
+                    TakeObject();
+                }
+            }
+        }
+    }
+    public class BladeSharp : MonoBehaviour, Messages.IOnBeforeSerialise, Messages.IOnAfterDeserialise, Messages.IOnGripped, Messages.IOnDrop
     {
         public class SoftConnection
         {
@@ -2632,6 +2901,8 @@ namespace Utility01
         private int bufferLength;
         public bool ShouldSlice = false;
         public bool SliceOnlyDeads = true;
+        public bool NotCollideWithGrip = true;
+        private PersonBehaviour gripPerson = null;
         public float SliceChance
         {
             get
@@ -2658,6 +2929,8 @@ namespace Utility01
                 layerMask = LayerMask,
                 useLayerMask = true
             }, buffer);
+            Collider2D[] personColliders = new Collider2D[0];
+            if (gripPerson && NotCollideWithGrip) personColliders = gripPerson.GetPersonColliders();
             foreach (KeyValuePair<PhysicalBehaviour, SoftConnection> softConnection in softConnections)
             {
                 softConnection.Value.shouldBeDeleted = true;
@@ -2665,7 +2938,7 @@ namespace Utility01
             for (int i = 0; i < bufferLength; i++)
             {
                 Collider2D collider2D = buffer[i];
-                if (!(collider2D.transform.root != transform.root) || !Global.main.PhysicalObjectsInWorldByTransform.TryGetValue(collider2D.transform, out var value))
+                if (!(collider2D.transform.root != transform.root) || !Global.main.PhysicalObjectsInWorldByTransform.TryGetValue(collider2D.transform, out var value) || (NotCollideWithGrip && personColliders.Contains(collider2D)))
                 {
                     continue;
                 }
@@ -2807,6 +3080,22 @@ namespace Utility01
         {
             Vector2 position = coll.ClosestPoint(transform.position);
             return SharpCollider.ClosestPoint(position);
+        }
+
+        public void OnGripped(GripBehaviour gripper)
+        {
+            if (gripper.transform.root.TryGetComponent(out PersonBehaviour personBehaviour))
+            {
+                gripPerson = personBehaviour;
+            }
+        }
+
+        public void OnDrop(GripBehaviour formerGripper)
+        {
+            if (formerGripper.transform.root.TryGetComponent(out PersonBehaviour personBehaviour))
+            {
+                if (personBehaviour == gripPerson) gripPerson = null;
+            }
         }
     }
     public class BurnableSpriteObject : MonoBehaviour
