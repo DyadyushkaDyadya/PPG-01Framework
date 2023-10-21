@@ -167,6 +167,12 @@ namespace Utility01
             foreach (Modification modification in modifications)
                 ModAPI.Register(modification);
         }
+        internal static Modification[] GetModifications(Category category)
+        {
+            var modifications = (Dictionary<Modification, ModMetaData>)Type.GetType("ModificationManager, Assembly-CSharp, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null").GetField("Modifications", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic).GetValue(null);
+            var categoryModifications = modifications.Select(m => m.Key).Where(m => m.CategoryOverride == category).ToArray();
+            return categoryModifications;
+        }
         internal static Category GetNewCategory(Sprite categoryIcon, string categoryName, string categoryDescription)
         {
             try
@@ -353,6 +359,32 @@ namespace Utility01
             }
             return renderer;
         }
+        internal static void CreateGlobalContextButton(string name, Action action)
+        {
+            var contextMenu = ((ContextMenuBehaviour)typeof(ContextMenuBehaviour).GetField("Instance", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static).GetValue(null));
+            var newButton = GameObject.Instantiate(contextMenu.ButtonPrefab, contextMenu.ButtonParent);
+            UnityEngine.Object.Destroy(newButton.GetComponent<TextUpdaterBehaviour>());
+            newButton.transform.GetChild(0).gameObject.GetComponent<TextMeshProUGUI>().text = name;
+            newButton.GetComponent<Button>().onClick.AddListener(() =>
+            {
+                action.Invoke();
+            });
+        }
+        public static PolygonCollider2D FixColliders2(this GameObject instance)
+        {
+            Collider2D[] components = instance.GetComponents<Collider2D>();
+            for (int i = 0; i < components.Length; i++)
+            {
+                UnityEngine.Object.Destroy(components[i]);
+            }
+
+            var col = instance.AddComponent<PolygonCollider2D>();
+            if (instance.TryGetComponent<PhysicalBehaviour>(out var component))
+            {
+                component.ResetColliderArray();
+            }
+            return col;
+        }
         internal static void BetterDestroy<T>(this GameObject Instance) where T : Component
         {
             foreach (Component component in Instance.GetComponents<T>())
@@ -380,6 +412,10 @@ namespace Utility01
         public static Vector3 GetModuleVector(this Vector3 vector)
         {
             return new Vector3(Math.Abs(vector.x), Math.Abs(vector.y), Math.Abs(vector.z));
+        }
+        public static Vector2 GetModuleVector(this Vector2 vector)
+        {
+            return new Vector2(Math.Abs(vector.x), Math.Abs(vector.y));
         }
         public static void SetPositionWithOffSet(this Transform child, Transform parent, float offSetX = 0, float offSetY = 0)
         {
@@ -615,6 +651,21 @@ namespace Utility01
             customButton.TargetButton = newButton;
             newButton.transform.SetSiblingIndex(targetSibilingIndex);
         }
+        public static void DialogFloat(string title, string placeholder, Action<float> result)
+        {
+            var dialogBox = (DialogBox)null;
+            dialogBox = DialogBoxManager.TextEntry(title, placeholder, new DialogButton[]
+            {
+                new DialogButton("Close", true, () => { }),
+                new DialogButton("Enter", true, () =>
+                {
+                    float resultF = 0f;
+                    float.TryParse(dialogBox.EnteredText, out resultF);
+                    result.Invoke(resultF);
+                })
+            });
+            dialogBox.InputField.contentType = TMP_InputField.ContentType.DecimalNumber;
+        }
         public static bool IsVisible(this GameObject gameObject)
         {
             if (gameObject.TryGetComponent<SpriteRenderer>(out SpriteRenderer spriteRenderer))
@@ -670,6 +721,19 @@ namespace Utility01
         {
             return (A)typeof(T).GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic).Where(field => field.Name == nameField).FirstOrDefault().GetValue(obj);
         }
+        public static A InvokeMethod<A, T>(this object obj, string nameMethod, params object[] args)
+        {
+            return (A)typeof(T).GetMethod(nameMethod, BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic).Invoke(obj, args);
+        }
+        public static void InvokeMethod<T>(this object obj, string nameMethod, params object[] args)
+        {
+            typeof(T).GetMethod(nameMethod, BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic).Invoke(obj, args);
+        }
+        public static A InvokeMethod<A, T>(this object obj, string nameMethod, Type[] types, params object[] args)
+        {
+            var method = typeof(T).GetMethod(nameMethod, BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic, null, types, null);
+            return (A)method.Invoke(obj, args);
+        }
         public static void CopyPublicFields(this object ObjectB, object ObjectA)
         {
             foreach (FieldInfo fieldinfo in ObjectA.GetType().GetFields())
@@ -702,6 +766,56 @@ namespace Utility01
             return list;
 
         }
+        public static Vector3[] CalculateParabola(Vector3 pointA, Vector3 pointB, int vertexCount, DistanceJoint2D typedJoint)
+        {
+            var vertices = new Vector3[vertexCount];
+            if (vertexCount > 1)
+            {
+                float num = typedJoint.distance * typedJoint.distance;
+                float num2 = Mathf.Pow(1f - (pointA - pointB).sqrMagnitude / num, 0.65f) * typedJoint.distance / 2f;
+                for (int i = 0; i < vertexCount; i++)
+                {
+                    float num3 = (float)i / (float)vertexCount;
+                    Vector3 vector = Vector3.Lerp(pointA, pointB, num3);
+                    if (num2 > 1E-45f)
+                    {
+                        vector.y += ParabolaFunction(num3) * num2;
+                    }
+                    vertices[i] = vector;
+                }
+            }
+            vertices[0] = pointA;
+            vertices[vertexCount - 1] = pointB;
+            return vertices;
+        }
+        public static Vector3[] CalculateParabola(Vector3 pointA, Vector3 pointB, int vertexCount)
+        {
+            var vertices = new Vector3[vertexCount];
+            if (vertexCount > 1)
+            {
+                float num = 0f;
+                var distance = Vector2.Distance(pointA, pointB);
+                num = distance * distance;
+                float num2 = Mathf.Pow(1f - (pointA - pointB).sqrMagnitude / num, 0.65f) * num / 2f;
+                for (int i = 0; i < vertexCount; i++)
+                {
+                    float num3 = (float)i / (float)vertexCount;
+                    Vector3 vector = Vector3.Lerp(pointA, pointB, num3);
+                    if (num2 > 1E-45f)
+                    {
+                        vector.y += ParabolaFunction(num3) * num2;
+                    }
+                    vertices[i] = vector;
+                }
+            }
+            vertices[0] = pointA;
+            vertices[vertexCount - 1] = pointB;
+            return vertices;
+        }
+        public static float ParabolaFunction(float x)
+        {
+            return Utils.Cosh(2f * x * 1.316958f - 1.316958f) - 2f;
+        }
         public static Collider2D[] GetPersonColliders(this PersonBehaviour personBehaviour, bool withGrips = true)
         {
             var grips = personBehaviour.gameObject.GetComponentsInChildren<GripBehaviour>();
@@ -709,6 +823,17 @@ namespace Utility01
             var personColliders = personBehaviour.gameObject.GetComponentsInChildren<Collider2D>();
             if (withGrips) return personColliders.Concat(gripsColliders).ToArray();
             return personColliders;
+        }
+        public static GripBehaviour[] GetGripBehaviours(this PersonBehaviour personBehaviour)
+        {
+            var grips = personBehaviour.gameObject.GetComponentsInChildren<GripBehaviour>();
+            return grips;
+        }
+        public static PhysicalBehaviour[] GetGripObjects(this PersonBehaviour personBehaviour)
+        {
+            var grips = personBehaviour.gameObject.GetComponentsInChildren<GripBehaviour>();
+            var gripsColliders = grips.Where(g => g.CurrentlyHolding != null).Where(g => g.CurrentlyHolding.gameObject.GetComponent<Collider2D>()).Select(g => g.CurrentlyHolding).ToArray();
+            return gripsColliders;
         }
         public static PointDebuggerCircle DrawCircle(this GameObject gameObject, float radius = 0.3f)
         {
@@ -748,6 +873,34 @@ namespace Utility01
             var a = colliderHandler.AddComponent<PointDebuggerCollider>();
             a.Collider = collider;
             return a;
+        }
+        public static void SetShotMultiplier(this LimbBehaviour limbBehaviour, float multiplier, bool serialized = false)
+        {
+            if (serialized)
+            {
+                var shotMultiplier = limbBehaviour.gameObject.GetOrAddComponent<LimbShotMultiplier>();
+                shotMultiplier.Multiplier = multiplier;
+            }
+            else
+            {
+                var shotMultiplier = limbBehaviour.gameObject.GetOrAddComponent<LimbShotMultiplierNonSerialized>();
+                shotMultiplier.Multiplier = multiplier;
+            }
+        }
+        public static void SetCollisionMultiplier(this LimbBehaviour limbBehaviour, float multiplier, bool isFakeAndroid = true, bool serialized = false)
+        {
+            if (serialized)
+            {
+                var colMultiplier = limbBehaviour.gameObject.GetOrAddComponent<LimbCollisionMultiplier>();
+                colMultiplier.fakeAndroid = isFakeAndroid;
+                colMultiplier.Multiplier = multiplier;
+            }
+            else
+            {
+                var colMultiplier = limbBehaviour.gameObject.GetOrAddComponent<LimbCollisionMultiplierNonSerialized>();
+                colMultiplier.fakeAndroid = isFakeAndroid;
+                colMultiplier.Multiplier = multiplier;
+            }
         }
         public static void Destroy(this UnityEngine.Object @object)
         {
@@ -846,9 +999,9 @@ namespace Utility01
         public static void InitializePhysicalComponent(this GameObject gameObject)
         {
             gameObject.layer = LayerMask.NameToLayer("Objects");
-            gameObject.AddComponent<Rigidbody2D>();
-            gameObject.AddComponent<SpriteRenderer>();
-            gameObject.AddComponent<BoxCollider2D>();
+            gameObject.GetOrAddComponent<Rigidbody2D>();
+            gameObject.GetOrAddComponent<SpriteRenderer>();
+            gameObject.GetOrAddComponent<BoxCollider2D>();
             PhysicalBehaviour physicalBehaviour = gameObject.AddComponent<PhysicalBehaviour>();
             physicalBehaviour.Properties = ModAPI.FindPhysicalProperties("Metal");
             physicalBehaviour.SpawnSpawnParticles = false;
@@ -1197,7 +1350,10 @@ namespace Utility01
             Prefab.AddComponent<AudioSourceTimeScaleBehaviour>();
             Prefab.name = asset.name;
             Prefab.GetOrAddComponent<SerialiseInstructions>().OriginalSpawnableAsset = asset;
-            beforePerform?.Invoke(Prefab);
+            if(beforePerform != null)
+            {
+                beforePerform.Invoke(Prefab);
+            }
             try
             {
                 CatalogBehaviour.PerformMod(asset, Prefab);
@@ -1404,7 +1560,7 @@ namespace Utility01
     public class AttachmentAttribute : MonoBehaviour
     {
         public string attributeName;
-        [SkipSerialisation]
+        //[SkipSerialisation]
         public bool attached;
         public LimbClassification limbClassification;
         public Vector2 offsetPosition = Vector2.zero;
@@ -1412,8 +1568,9 @@ namespace Utility01
         public Vector2 connectedAnchor = Vector2.zero;
         public Vector2 scale = Vector2.one;
         public FixedJoint2D fixedJoint;
+        public Rigidbody2D attachedObject;
         public PersonBehaviour personBehaviour;
-        protected PhysicalBehaviour physicalBehaviour;
+        public PhysicalBehaviour physicalBehaviour;
         public enum LimbClassification
         {
             NoLimb,
@@ -1427,13 +1584,17 @@ namespace Utility01
         }
         private void Start()
         {
-            physicalBehaviour = gameObject.GetComponent<PhysicalBehaviour>();
+            physicalBehaviour = gameObject.GetOrAddComponent<PhysicalBehaviour>();
             physicalBehaviour.ContextMenuOptions.Buttons.Add(new ContextMenuButton(() => attached, "detachAttribute", "Detach " + attributeName, "Detach " + attributeName, () =>
             {
                 Detach();
             }));
             AttachemntsUtils.attachmentAttributes.Add(this);
             physicalBehaviour.HoldingPositions = new Vector3[] { };
+            if (attached && attachedObject)
+            {
+                Attach(attachedObject);
+            }
             OnInitialized();
         }
         public virtual void OnInitialized()
@@ -1478,9 +1639,12 @@ namespace Utility01
                 }
             }
         }
-        private void SwitchCollision(PersonBehaviour person, bool enable = false)
+        protected IEnumerator SwitchCollision(PersonBehaviour person, bool enable = false, float wait = 1)
         {
-            foreach (var limb in personBehaviour.Limbs)
+            if (person == null) yield break;
+
+            yield return new WaitForSecondsRealtime(wait);
+            foreach (var limb in person.Limbs)
             {
                 Physics2D.IgnoreCollision(limb.Collider, gameObject.GetComponent<Collider2D>(), !enable);
             }
@@ -1491,7 +1655,7 @@ namespace Utility01
         }
         private void Attach(Rigidbody2D rigidbody)
         {
-            SwitchCollision(personBehaviour);
+            StartCoroutine(SwitchCollision(personBehaviour, false, 0));
             var mapScale = rigidbody.transform.root.localScale * scale * rigidbody.transform.localScale;
             gameObject.transform.position = new Vector3(rigidbody.transform.position.x + offsetPosition.x * mapScale.x, rigidbody.transform.position.y + offsetPosition.y * mapScale.y);
             var rotation = gameObject.transform.rotation;
@@ -1501,6 +1665,14 @@ namespace Utility01
             gameObject.transform.localScale = new Vector3(mapScale.x, mapScale.y, 1);
             fixedJoint = gameObject.AddComponent<FixedJoint2D>();
             fixedJoint.connectedBody = rigidbody;
+            attachedObject = rigidbody;
+            rigidbody.gameObject.GetOrAddComponent<ActOnDestroy>().Event.AddListener(() =>
+            {
+                if(attachedObject == rigidbody && attached)
+                {
+                    Detach();
+                }
+            });
             if (connectedAnchor != new Vector2(0, 0))
             {
                 fixedJoint.autoConfigureConnectedAnchor = false;
@@ -1538,18 +1710,13 @@ namespace Utility01
             if (fixedJoint != null)
             {
                 UnityEngine.Object.Destroy(fixedJoint);
-                Task.Run(async () =>
-                {
-                    await Task.Delay(1000);
-                    if (personBehaviour != null)
-                    {
-                        SwitchCollision(personBehaviour, true);
-                    }
-                    personBehaviour = null;
-                    attached = false;
-                });
             }
             fixedJoint = null;
+            attachedObject = null;
+            attached = false;
+            var oldPerson = personBehaviour;
+            personBehaviour = null;
+            StartCoroutine(SwitchCollision(oldPerson, true));
         }
         public virtual void OnDestroy()
         {
@@ -2711,6 +2878,66 @@ namespace Utility01
     }
     #endregion
     #region OtherClasses
+    // todo local time scaler
+    [RequireComponent(typeof(Rigidbody2D))]
+    public class LocalTimeScaler : MonoBehaviour
+    {
+        public Rigidbody2D rb;
+        public int slowLevel = 1;
+
+        public float multiplier = 1;
+        public Vector2 lastVelocity = Vector2.zero;
+        public Vector2 lastDifference = Vector2.zero;
+        private int currentPass = 0;
+        private void Start()
+        {
+            rb = gameObject.GetComponent<Rigidbody2D>();
+            lastVelocity = rb.velocity;
+        }
+        private void FixedUpdate()
+        {
+            if(currentPass > slowLevel)
+            {
+                currentPass = 0;
+                lastDifference = rb.velocity - lastVelocity;
+                rb.AddForce(lastDifference * multiplier);
+                lastVelocity = rb.velocity;
+            }
+            else
+            {
+                currentPass++;
+            }
+        }
+    }
+    [SkipSerialisation]
+    public class RepeatInvoker : MonoBehaviour, Messages.IOnBeforeSerialise
+    {
+        public float targetTime = 1f;
+        public enum TimeType
+        {
+            scaled,
+            realtime
+        }
+        public TimeType timeType;
+        public UnityEvent onInvoke = new UnityEvent();
+        private void Start()
+        {
+            StartCoroutine(Repeater());
+        }
+        private IEnumerator Repeater()
+        {
+            if (timeType == TimeType.realtime) yield return new WaitForSecondsRealtime(targetTime);
+            else yield return new WaitForSeconds(targetTime);
+
+            onInvoke.Invoke();
+            StartCoroutine(Repeater());
+        }
+
+        public void OnBeforeSerialise()
+        {
+            throw new NotImplementedException();
+        }
+    }
     [SkipSerialisation]
     public class LocalScaler : MonoBehaviour
     {
@@ -2725,7 +2952,7 @@ namespace Utility01
         {
             Debug.Log("Start ScaleCycl");
             Vector3 startScale = transform.localScale;
-            for (float i = 0; i < 1; i += speed)
+            for(float i = 0; i < 1; i += speed)
             {
                 yield return new WaitForSeconds(speedCycl);
                 Vector3 lerped = Vector3.Lerp(startScale, targetLocalScale, i);
@@ -2748,7 +2975,7 @@ namespace Utility01
             for (int i = 0; i < num; i++)
             {
                 Collider2D collider2D = hitBuffer[i];
-                if (onlyWith != null)
+                if(onlyWith != null)
                 {
                     if (!onlyWith.Contains(collider2D)) continue;
                 }
@@ -2892,14 +3119,21 @@ namespace Utility01
         public int maxCount;
         public float offsetRotation;
         public Vector2 holdingPos;
-        public Item(string name, SpawnableAsset prefab, Action<GameObject> afterSpawn, float offsetRotation, Vector2 holdingPos, int count)
+        public Item(string name, SpawnableAsset prefab, Action<GameObject> afterSpawn, float offsetRotation, Vector2 holdingPos, int count, int maxCount = -1)
         {
             this.name = name;
             guid = name;
             this.spawnableAsset = prefab;
             this.afterSpawn = afterSpawn;
             this.countItem = count;
-            maxCount = count;
+            if (maxCount == -1)
+            {
+                this.maxCount = count;
+            }
+            else
+            {
+                this.maxCount = maxCount;
+            }
             isPicked = false;
             this.offsetRotation = offsetRotation;
             this.holdingPos = holdingPos;
@@ -2913,6 +3147,7 @@ namespace Utility01
             this.items = items;
         }
     }
+#pragma warning disable CS0612
     public class InventoryContainerBehaviour : MonoBehaviour
     {
         public Item[] items
@@ -2928,12 +3163,27 @@ namespace Utility01
         }
         public Items itemsContainer;
         public int targetItemIndex;
+        public bool Activated = true;
+        public List<InventoryPickerBehaviour> targetPickers = new List<InventoryPickerBehaviour>();
         public void Start()
         {
-
+            if(gameObject.TryGetComponent(out PhysicalBehaviour physicalBehaviour))
+            {
+                physicalBehaviour.ContextMenuOptions.Buttons.Add(new ContextMenuButton("toggleInventory", () => $"{(Activated ? "Disable" : "Enable")} Inventory", "Toggle Inventory", () => Activated = !Activated));
+            }
         }
-        public bool Push(Item item)
+        public bool Push(Item item, InventoryPickerBehaviour inventoryPicker)
         {
+            if (!Activated) return false;
+
+            if(targetPickers.Count > 0)
+            {
+                if (!targetPickers.Contains(inventoryPicker))
+                {
+                    return false;
+                }
+            }
+
             var targetItems = items.Where(i => i.guid == item.guid && i.countItem < i.maxCount).ToList();
             if (targetItems.Count == 0) return false;
 
@@ -2941,8 +3191,18 @@ namespace Utility01
             items[index].countItem++;
             return true;
         }
-        public bool Take()
+        public bool Take(InventoryPickerBehaviour inventoryPicker)
         {
+            if (!Activated) return false;
+
+            if (targetPickers.Count > 0)
+            {
+                if (!targetPickers.Contains(inventoryPicker))
+                {
+                    return false;
+                }
+            }
+
             if (items[targetItemIndex].countItem - 1 >= 0)
             {
                 var item = items[targetItemIndex];
@@ -3004,6 +3264,7 @@ namespace Utility01
         public Func<bool> canTake = () => true;
         public Func<bool> canPush = () => true;
         public float findRadius = 0.25f;
+        [Obsolete]
         public InventoryContainerBehaviour[] targetsContainers = null;
 
         private void Start()
@@ -3016,7 +3277,6 @@ namespace Utility01
         }
         public void Grip(PersonBehaviour personBehaviour, GripBehaviour gripBehaviour)
         {
-
         }
         public void Drop(PersonBehaviour personBehaviour, GripBehaviour gripBehaviour)
         {
@@ -3029,7 +3289,7 @@ namespace Utility01
             foreach (var inv in inventories)
             {
                 if (targetsContainers != null && !targetsContainers.Contains(inv)) continue;
-                if (inv.Take())
+                if (inv.Take(this))
                 {
                     if (gripBehaviour.CurrentlyHolding != null) gripBehaviour.DropObject();
                     currentItem = inv.items[inv.targetItemIndex];
@@ -3043,7 +3303,7 @@ namespace Utility01
                     var rotation = gripBehaviour.gameObject.transform.rotation;
                     rotation.eulerAngles = new Vector3(rotation.eulerAngles.x, rotation.eulerAngles.y, rotation.eulerAngles.z + (currentItem.Value.offsetRotation * direction));
                     createdObject.transform.rotation = rotation;
-                    Utility.GripAttach(gripBehaviour, createdObject.GetComponent<PhysicalBehaviour>(), currentItem.Value.holdingPos);
+                    Utility.GripAttach(gripBehaviour, createdObject.GetComponent<PhysicalBehaviour>(), (currentItem.Value.holdingPos == new Vector2(0.001f, 0.001f) ? (Vector2)createdObject.GetComponent<PhysicalBehaviour>().HoldingPositions.PickRandom() : currentItem.Value.holdingPos));
                 }
                 break;
             }
@@ -3060,7 +3320,7 @@ namespace Utility01
             foreach (var inv in inventories)
             {
                 if (targetsContainers != null && !targetsContainers.Contains(inv)) continue;
-                if (inv.Push(currentItem.Value))
+                if (inv.Push(currentItem.Value, this))
                 {
                     pushed = true;
                     break;
@@ -3088,6 +3348,7 @@ namespace Utility01
     }
     public class BladeSharp : MonoBehaviour, Messages.IOnBeforeSerialise, Messages.IOnAfterDeserialise, Messages.IOnGripped, Messages.IOnDrop
     {
+        public float damageMultiplier = 1f;
         public class SoftConnection
         {
             [NonSerialized]
@@ -3145,6 +3406,10 @@ namespace Utility01
             bool flag = PhysicalBehaviour.rigidbody.GetRelativePointVelocity(Tip).magnitude > MinSpeed;
             ProcessSoftConnections(flag, flag ? 10f : ConnectionStrength);
         }
+        private void Start()
+        {
+            PhysicalBehaviour = gameObject.GetComponent<PhysicalBehaviour>();
+        }
         private void ProcessSoftConnections(bool shouldSaw = true, float connectionStrength = 2f)
         {
             bufferLength = SharpCollider.OverlapCollider(new ContactFilter2D
@@ -3153,7 +3418,10 @@ namespace Utility01
                 useLayerMask = true
             }, buffer);
             Collider2D[] personColliders = new Collider2D[0];
-            if (gripPerson && NotCollideWithGrip) personColliders = gripPerson.GetPersonColliders();
+            if (gripPerson && NotCollideWithGrip)
+            {
+                personColliders = gripPerson.GetPersonColliders();
+            }
             foreach (KeyValuePair<PhysicalBehaviour, SoftConnection> softConnection in softConnections)
             {
                 softConnection.Value.shouldBeDeleted = true;
@@ -3161,8 +3429,18 @@ namespace Utility01
             for (int i = 0; i < bufferLength; i++)
             {
                 Collider2D collider2D = buffer[i];
-                if (!(collider2D.transform.root != transform.root) || !Global.main.PhysicalObjectsInWorldByTransform.TryGetValue(collider2D.transform, out var value) || (NotCollideWithGrip && personColliders.Contains(collider2D)))
+                bool ignoredInPerson = false;
+                foreach(var pc in personColliders)
                 {
+                    if(Physics2D.GetIgnoreCollision(pc, collider2D))
+                    {
+                        ignoredInPerson = true;
+                        break;
+                    }
+                }
+                if (!(collider2D.transform.root != transform.root) || !Global.main.PhysicalObjectsInWorldByTransform.TryGetValue(collider2D.transform, out var value) || (NotCollideWithGrip && (personColliders.Contains(collider2D) || ignoredInPerson )))
+                {
+                    Physics2D.IgnoreCollision(SharpCollider, collider2D, true);
                     continue;
                 }
                 if (softConnections.TryGetValue(value, out var value2))
@@ -3276,8 +3554,8 @@ namespace Utility01
                 IgnoreCollisionStackController.IgnoreCollisionSubstituteMethod(coll, SharpCollider);
                 Stabbing stabbing = new Stabbing(PhysicalBehaviour, otherPhys, (transform.position - otherPhys.transform.position).normalized, hitPoint);
                 otherPhys.SendMessage("Stabbed", stabbing, SendMessageOptions.DontRequireReceiver);
-                otherPhys.SendMessage("Shot", new Shot((transform.position - otherPhys.transform.position).normalized, hitPoint, 65), SendMessageOptions.DontRequireReceiver);
-                otherPhys.SendMessage("Shot", new Shot((transform.position - otherPhys.transform.position).normalized, hitPoint, 75), SendMessageOptions.DontRequireReceiver);
+                otherPhys.SendMessage("Shot", new Shot((transform.position - otherPhys.transform.position).normalized, hitPoint, 65 * damageMultiplier), SendMessageOptions.DontRequireReceiver);
+                otherPhys.SendMessage("Shot", new Shot((transform.position - otherPhys.transform.position).normalized, hitPoint, 75 * damageMultiplier), SendMessageOptions.DontRequireReceiver);
                 if (ShouldSlice && UnityEngine.Random.value > 1 - SliceChance)
                 {
                     if (SliceOnlyDeads)
@@ -3304,7 +3582,7 @@ namespace Utility01
             Vector2 position = coll.ClosestPoint(transform.position);
             return SharpCollider.ClosestPoint(position);
         }
-
+        
         public void OnGripped(GripBehaviour gripper)
         {
             if (gripper.transform.root.TryGetComponent(out PersonBehaviour personBehaviour))
@@ -3583,6 +3861,69 @@ namespace Utility01
             Destroy(this);
         }
     }
+    [SkipSerialisation]
+    public class LimbCollisionMultiplierNonSerialized : LimbCollisionMultiplier { }
+    public class LimbCollisionMultiplier : MonoBehaviour
+    {
+        public PersonBehaviour Person;
+        public LimbBehaviour LimbBehaviour;
+        public float Multiplier = 1f;
+        public bool fakeAndroid = false;
+        private void Start()
+        {
+            LimbBehaviour = gameObject.GetComponent<LimbBehaviour>();
+            Person = LimbBehaviour.Person;
+        }
+        private void OnCollisionEnter2D(Collision2D collision)
+        {
+            bool isAndroid = fakeAndroid ? false : LimbBehaviour.IsAndroid;
+            ContactPoint2D[] contactBuffer = new ContactPoint2D[8];
+            int contacts = collision.GetContacts(contactBuffer);
+            float num = Utils.GetAverageImpulseRemoveOutliers(contactBuffer, contacts, 1f) / LimbBehaviour.InvokeMethod<float, LimbBehaviour>("GetMassStrengthRatio") * Utility.GetPreferences().FragilityMultiplier * 0.8f * Multiplier;
+            Vector2 normal = contactBuffer[0].normal;
+            Vector2 point = contactBuffer[0].point;
+            PhysicalBehaviour physicalBehaviour = LimbBehaviour.PhysicalBehaviour;
+            if (isAndroid)
+            {
+                num *= 0.1f;
+            }
+            else if (Global.main.PhysicalObjectsInWorldByTransform.TryGetValue(collision.transform, out physicalBehaviour) && physicalBehaviour.SimulateTemperature && physicalBehaviour.Temperature >= 70f)
+            {
+                LimbBehaviour.Damage(physicalBehaviour.Temperature / 140f);
+                LimbBehaviour.SkinMaterialHandler.AddDamagePoint(DamageType.Burn, point, physicalBehaviour.Temperature * 0.01f);
+                if (LimbBehaviour.NodeBehaviour.IsConnectedToRoot && !LimbBehaviour.IsParalysed)
+                {
+                    Person.AddPain(1f);
+                }
+                LimbBehaviour.Wince(150f);
+                if (physicalBehaviour.Temperature >= 100f)
+                {
+                    LimbBehaviour.CirculationBehaviour.HealBleeding();
+                }
+            }
+            if (LimbBehaviour.HasBrain && num > 0.6f && (double)UnityEngine.Random.value > 0.8)
+            {
+                LimbBehaviour.CirculationBehaviour.InternalBleedingIntensity += num;
+            }
+            if (num < 2f)
+            {
+                return;
+            }
+            LimbBehaviour.BruiseCount += 1;
+            LimbBehaviour.InvokeMethod<LimbBehaviour>("PropagateImpactDamage", new object[] { num, normal, point, 0, LimbBehaviour });
+            if (num < 1f || isAndroid || LimbBehaviour.CirculationBehaviour.GetAmountOfBlood() < 0.2f)
+            {
+                return;
+            }
+            if (num < 3f && LimbBehaviour.Health > LimbBehaviour.InitialHealth * 0.2f)
+            {
+                return;
+            }
+            collision.gameObject.SendMessage("Decal", new DecalInstruction(LimbBehaviour.BloodDecal, point, LimbBehaviour.CirculationBehaviour.GetComputedColor(LimbBehaviour.GetOriginalBloodType().Color), 1f), SendMessageOptions.DontRequireReceiver);
+        }
+    }
+    [SkipSerialisation]
+    public class LimbShotMultiplierNonSerialized : LimbShotMultiplier { }
     public class LimbShotMultiplier : MonoBehaviour
     {
         public PersonBehaviour Person;
@@ -3920,6 +4261,7 @@ namespace Utility01
             }
         }
         private VectorLimits scaleLimits;
+        public bool ScaleModule = false;
         private bool needScaleLimits;
         public float DeleteAfterParentDestroy
         {
@@ -3977,7 +4319,14 @@ namespace Utility01
                         scale = new Vector3(scale.x > scaleLimits.max.x ? scaleLimits.max.x : scale.x, scale.y > scaleLimits.max.y ? scaleLimits.max.y : scale.y, scale.z > scaleLimits.max.z ? scaleLimits.max.z : scale.z);
                         scale = new Vector3(scale.x < scaleLimits.min.x ? scaleLimits.min.x : scale.x, scale.y < scaleLimits.min.y ? scaleLimits.min.y : scale.y, scale.z < scaleLimits.min.z ? scaleLimits.min.z : scale.z);
                     }
-                    transform.localScale = scale;
+                    if (ScaleModule)
+                    {
+                        transform.localScale = scale.GetModuleVector();
+                    }
+                    else
+                    {
+                        transform.localScale = scale;
+                    }
                 }
                 if (RotationSync)
                 {
@@ -3993,6 +4342,243 @@ namespace Utility01
                 yield return new WaitForSeconds(m_deleteAfterParentDestroy);
                 UnityEngine.Object.Destroy(gameObject);
             }
+        }
+    }
+    #endregion
+    #region PoseManager
+    public static class PoseManager
+    {
+        public static LimbBehaviour FindLimb(PersonBehaviour personBehaviour, string nameLimb)
+        {
+            foreach (var limb in personBehaviour.Limbs)
+            {
+                if (limb.name == nameLimb)
+                {
+                    return limb;
+                }
+            }
+            return null;
+        }
+        public static (RagdollPose, int) InitializePoseFromJson(PersonBehaviour personBehaviour, RagdollSerialize ragdollDesirialize)
+        {
+            var ragdollPose = new RagdollPose();
+
+            var desirializeAngles = new List<RagdollPose.LimbPose>();
+            foreach (var angle in ragdollDesirialize.Angles)
+            {
+                var angleDesirialize = new RagdollPose.LimbPose(FindLimb(personBehaviour, angle.Name), angle.Angle);
+                desirializeAngles.Add(angleDesirialize);
+            }
+            //init fields
+            ragdollPose.Angles = desirializeAngles;
+            ragdollPose.AnimationSpeedMultiplier = ragdollDesirialize.AnimationSpeedMultiplier;
+            ragdollPose.DragInfluence = ragdollDesirialize.DragInfluence;
+            ragdollPose.ForceMultiplier = ragdollDesirialize.ForceMultiplier;
+            ragdollPose.Name = ragdollDesirialize.Name;
+            ragdollPose.Rigidity = ragdollDesirialize.Rigdity;
+            ragdollPose.ShouldStandUpright = ragdollDesirialize.ShouldStandUpright;
+            ragdollPose.ShouldStumble = ragdollDesirialize.ShouldStumble;
+            ragdollPose.State = PoseState.Sitting;
+            ragdollPose.UprightForceMultiplier = ragdollDesirialize.UprightForceMultyiplier;
+
+            personBehaviour.Poses.Add(ragdollPose);
+            ragdollPose.ConstructDictionary();
+            var poseID = personBehaviour.Poses.IndexOf(ragdollPose);
+            return (ragdollPose, poseID);
+        }
+        public static RagdollSerialize GetRagdollSerialize(string namePose)
+        {
+            var ragdollDesirialize = ModAPI.DeserialiseJSON<RagdollSerialize>($"{Utility.modPath}\\" + namePose + ".json");
+            return ragdollDesirialize;
+        }
+        public struct RagdollSerialize
+        {
+            public string Name;
+            public float AnimationSpeedMultiplier;
+            public float DragInfluence;
+            public bool ShouldStandUpright;
+            public bool ShouldStumble;
+            public float ForceMultiplier;
+            public float Rigdity;
+            public float UprightForceMultyiplier;
+            public List<LimbPoseSerialize> Angles;
+            public bool Hidden;
+            public TypeCreature? typeCreature;
+            public string NameCreature;
+            public enum TypeCreature
+            {
+                Humanoid,
+                CustomCreature
+            }
+
+            public RagdollSerialize(string namePose, List<RagdollPose.LimbPose> angles, float speedAnimation = 1, float dragInfluence = 1, float forceMultiplier = 1, bool shouldStandUpright = true, bool shouldStumble = false, float rigdity = 5, float uprightForceMultiploer = 1, bool hidden = false, TypeCreature? type = TypeCreature.Humanoid, string nameCreature = "Human")
+            {
+                this.Name = namePose;
+                this.AnimationSpeedMultiplier = speedAnimation;
+                this.DragInfluence = dragInfluence;
+                this.ShouldStandUpright = shouldStandUpright;
+                this.ShouldStumble = shouldStumble;
+                this.ForceMultiplier = forceMultiplier;
+                this.Rigdity = rigdity;
+                this.UprightForceMultyiplier = uprightForceMultiploer;
+                this.Hidden = hidden;
+                this.typeCreature = type;
+                this.NameCreature = nameCreature;
+                var newAngles = new List<LimbPoseSerialize>();
+                foreach (var angle in angles)
+                {
+                    var limbPoseSerialize = new LimbPoseSerialize(angle.Name, angle.Angle);
+                    newAngles.Add(limbPoseSerialize);
+                }
+                Angles = newAngles;
+            }
+            public struct LimbPoseSerialize
+            {
+                public float Angle;
+                public AnimationCurve AnimationCurve;
+                public float AnimationDuration;
+                public float EndAngle;
+                public string Name;
+                public float PoseRigidityModifier;
+                public float RandomSpeed;
+                public float StartAngle;
+                public float TimeOffset;
+                public float RandomInfluence;
+                public LimbPoseSerialize(string nameLimb, float angle)
+                {
+                    this.Angle = angle;
+                    this.Name = nameLimb;
+                    this.StartAngle = angle;
+                    this.EndAngle = angle;
+                    this.TimeOffset = 0f;
+                    this.PoseRigidityModifier = 0f;
+                    this.RandomInfluence = 0f;
+                    this.RandomSpeed = 1f;
+                    this.AnimationDuration = 1f;
+                    this.AnimationCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+                    this.AnimationCurve.postWrapMode = WrapMode.PingPong;
+                    this.AnimationCurve.preWrapMode = WrapMode.PingPong;
+                }
+            }
+        }
+    }
+    #endregion
+    #region LimbManager
+    public static class LimbManager
+    {
+        /*public static LimbBehaviour InitializeLimb(this GameObject obj, bool withInitializePhys = true)
+        {
+            var newLimb = obj;
+            var physicalNewLimb = newLimb.GetPhysicalBehaviour();
+            var newLimbBehaviour = newLimb.GetOrAddComponent<LimbBehaviour>();
+            newLimbBehaviour.ConnectedLimbs = new List<LimbBehaviour>()
+            {
+                parentLimb
+            };
+            newLimbBehaviour.NodeBehaviour = newLimb.GetOrAddComponent<ConnectedNodeBehaviour>();
+            newLimbBehaviour.NearestLimbToBrain = parentLimb.NearestLimbToBrain;
+            newLimbBehaviour.CirculationBehaviour.PushesTo = new CirculationBehaviour[] { parentLimb.CirculationBehaviour };
+            newLimbBehaviour.SkinMaterialHandler.adjacentLimbs = new SkinMaterialHandler[] { parentLimb.SkinMaterialHandler };
+            newLimbBehaviour.NodeBehaviour.Connections = new ConnectedNodeBehaviour[] { parentLimb.NodeBehaviour };
+            newLimbBehaviour.ChangeSpecificLimbSprite(skin, flash, bone, damage);
+            newLimbBehaviour.Joint = newLimb.GetOrAddComponent<HingeJoint2D>();
+            newLimbBehaviour.Joint.autoConfigureConnectedAnchor = false;
+            newLimbBehaviour.Joint.connectedBody = parentLimb.PhysicalBehaviour.rigidbody;
+            newLimbBehaviour.Joint.anchor = anchor;
+            newLimbBehaviour.Joint.connectedAnchor = connectedAnchor;
+            //newLimbBehaviour.Joint.autoConfigureConnectedAnchor = true;
+            newLimbBehaviour.Joint.limits = angles;
+            newLimbBehaviour.NodeBehaviour.IsRoot = false;
+            //newLimbBehaviour.Person.gameObject.GetComponent<SerialiseInstructions>().RelevantTransforms = (Transform[])newLimbBehaviour.Person.gameObject.GetComponent<SerialiseInstructions>().RelevantTransforms.Concat(new Transform[] {newLimbBehaviour.transform});
+            newLimbBehaviour.CirculationBehaviour.Source = parentLimb.CirculationBehaviour;
+            newLimbBehaviour.RoughClassification = LimbBehaviour.BodyPart.Arms;
+            var ncon = parentLimb.NodeBehaviour.Connections.ToList();
+            ncon.Add(newLimbBehaviour.NodeBehaviour);
+            parentLimb.NodeBehaviour.Connections = ncon.ToArray();
+            var pcircpushto = parentLimb.CirculationBehaviour.PushesTo.ToList();
+            pcircpushto.Add(newLimbBehaviour.CirculationBehaviour);
+            parentLimb.CirculationBehaviour.PushesTo = pcircpushto.ToArray();
+            var pskinadjacent = parentLimb.SkinMaterialHandler.adjacentLimbs.ToList();
+            pskinadjacent.Add(newLimbBehaviour.SkinMaterialHandler);
+            parentLimb.SkinMaterialHandler.adjacentLimbs = pskinadjacent.ToArray();
+            newLimbBehaviour.ConnectedLimbs.Add(parentLimb);
+            parentLimb.ConnectedLimbs.Add(newLimbBehaviour);
+            newLimbBehaviour.SkinMaterialHandler.Sync();
+            parentLimb.SkinMaterialHandler.Sync();
+            parentLimb.NodeBehaviour.RootPropagation();
+            newLimbBehaviour.gameObject.FixColliders();
+            newLimb.transform.root.gameObject.NoChildCollide();
+            if (newLimb.TryGetComponent<GoreStringBehaviour>(out GoreStringBehaviour goreString))
+            {
+                goreString.Other = parentLimb.PhysicalBehaviour.rigidbody;
+                goreString.OriginLine = new LineSegment(newLimbBehaviour.Joint.anchor, newLimbBehaviour.Joint.connectedAnchor);
+                goreString.OtherLine = new LineSegment(newLimbBehaviour.Joint.anchor, newLimbBehaviour.Joint.connectedAnchor);
+            }
+            newLimb.transform.SetParent(newLimb.transform.root);
+            return newLimbBehaviour;
+        }*/
+
+        public static LimbBehaviour CreateLimb(string nameLimb, Sprite skin, Sprite flash, Sprite bone, Sprite damage, LimbBehaviour parentLimb, Vector3 anchor, Vector3 connectedAnchor, JointAngleLimits2D angles)
+        {
+            var newLimb = Utility.CreateChildObject(parentLimb.gameObject, parentLimb.transform);
+            Utility.SetPositionWithOffSet(newLimb.transform, parentLimb.transform);
+            newLimb.name = nameLimb;
+            var physicalNewLimb = newLimb.GetPhysicalBehaviour();
+            var newLimbBehaviour = newLimb.GetOrAddComponent<LimbBehaviour>();
+            newLimbBehaviour.ConnectedLimbs = new List<LimbBehaviour>()
+            {
+                parentLimb
+            };
+            newLimbBehaviour.NodeBehaviour = newLimb.GetOrAddComponent<ConnectedNodeBehaviour>();
+            newLimbBehaviour.NearestLimbToBrain = parentLimb.NearestLimbToBrain;
+            newLimbBehaviour.CirculationBehaviour.PushesTo = new CirculationBehaviour[] { parentLimb.CirculationBehaviour };
+            newLimbBehaviour.SkinMaterialHandler.adjacentLimbs = new SkinMaterialHandler[] { parentLimb.SkinMaterialHandler };
+            newLimbBehaviour.NodeBehaviour.Connections = new ConnectedNodeBehaviour[] { parentLimb.NodeBehaviour };
+            newLimbBehaviour.ChangeSpecificLimbSprite(skin, flash, bone, damage);
+            newLimbBehaviour.Joint = newLimb.GetOrAddComponent<HingeJoint2D>();
+            newLimbBehaviour.Joint.autoConfigureConnectedAnchor = false;
+            newLimbBehaviour.Joint.connectedBody = parentLimb.PhysicalBehaviour.rigidbody;
+            newLimbBehaviour.Joint.anchor = anchor;
+            newLimbBehaviour.Joint.connectedAnchor = connectedAnchor;
+            //newLimbBehaviour.Joint.autoConfigureConnectedAnchor = true;
+            newLimbBehaviour.Joint.limits = angles;
+            newLimbBehaviour.NodeBehaviour.IsRoot = false;
+            //newLimbBehaviour.Person.gameObject.GetComponent<SerialiseInstructions>().RelevantTransforms = (Transform[])newLimbBehaviour.Person.gameObject.GetComponent<SerialiseInstructions>().RelevantTransforms.Concat(new Transform[] {newLimbBehaviour.transform});
+            newLimbBehaviour.CirculationBehaviour.Source = parentLimb.CirculationBehaviour;
+            newLimbBehaviour.RoughClassification = LimbBehaviour.BodyPart.Arms;
+            var ncon = parentLimb.NodeBehaviour.Connections.ToList();
+            ncon.Add(newLimbBehaviour.NodeBehaviour);
+            parentLimb.NodeBehaviour.Connections = ncon.ToArray();
+            var pcircpushto = parentLimb.CirculationBehaviour.PushesTo.ToList();
+            pcircpushto.Add(newLimbBehaviour.CirculationBehaviour);
+            parentLimb.CirculationBehaviour.PushesTo = pcircpushto.ToArray();
+            var pskinadjacent = parentLimb.SkinMaterialHandler.adjacentLimbs.ToList();
+            pskinadjacent.Add(newLimbBehaviour.SkinMaterialHandler);
+            parentLimb.SkinMaterialHandler.adjacentLimbs = pskinadjacent.ToArray();
+            newLimbBehaviour.ConnectedLimbs.Add(parentLimb);
+            parentLimb.ConnectedLimbs.Add(newLimbBehaviour);
+            newLimbBehaviour.SkinMaterialHandler.Sync();
+            parentLimb.SkinMaterialHandler.Sync();
+            parentLimb.NodeBehaviour.RootPropagation();
+            newLimbBehaviour.gameObject.FixColliders();
+            newLimb.transform.root.gameObject.NoChildCollide();
+            if (newLimb.TryGetComponent<GoreStringBehaviour>(out GoreStringBehaviour goreString))
+            {
+                goreString.Other = parentLimb.PhysicalBehaviour.rigidbody;
+                goreString.OriginLine = new LineSegment(newLimbBehaviour.Joint.anchor, newLimbBehaviour.Joint.connectedAnchor);
+                goreString.OtherLine = new LineSegment(newLimbBehaviour.Joint.anchor, newLimbBehaviour.Joint.connectedAnchor);
+            }
+            newLimb.transform.SetParent(newLimb.transform.root);
+            /*try
+            {
+                var serialiseInstructions = newLimbBehaviour.Person.gameObject.GetComponent<SerialiseInstructions>();
+                var relTr = serialiseInstructions.RelevantTransforms.ToList();
+                relTr.Add(newLimbBehaviour.transform);
+                serialiseInstructions.RelevantTransforms = relTr.ToArray();
+            }
+            catch
+            { }*/
+            return newLimbBehaviour;
         }
     }
     #endregion
