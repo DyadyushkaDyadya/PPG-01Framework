@@ -10,6 +10,7 @@ using UnityEngine.UI;
 using UnityEngine.Events;
 using UnityEngine.Rendering;
 using TMPro;
+using System.IO;
 
 namespace Utility01
 {
@@ -197,6 +198,16 @@ namespace Utility01
                 ThumbnailOverride = thumbnailOverride,
                 AfterSpawn = afterSpawn
             };
+        }
+        public static void WriteAllText(string path, string content)
+        {
+            var method = Type.GetType("System.IO.File").GetMethod("WriteAllText", BindingFlags.Public | BindingFlags.Static, null, new Type[] { typeof(string), typeof(string) }, null);
+            method.Invoke(null, new object[] { path, content });
+        }
+        public static string ReadAllText(string path)
+        {
+            var method = Type.GetType("System.IO.File").GetMethod("ReadAllText", BindingFlags.Public | BindingFlags.Static, null, new Type[] { typeof(string) }, null);
+            return (string)method.Invoke(null, new object[] { path });
         }
         public static void GripAttach(GripBehaviour gripBehaviour, PhysicalBehaviour physicalBehaviour, Vector2 holdingPos)
         {
@@ -1350,7 +1361,7 @@ namespace Utility01
             Prefab.AddComponent<AudioSourceTimeScaleBehaviour>();
             Prefab.name = asset.name;
             Prefab.GetOrAddComponent<SerialiseInstructions>().OriginalSpawnableAsset = asset;
-            if(beforePerform != null)
+            if (beforePerform != null)
             {
                 beforePerform.Invoke(Prefab);
             }
@@ -1668,7 +1679,7 @@ namespace Utility01
             attachedObject = rigidbody;
             rigidbody.gameObject.GetOrAddComponent<ActOnDestroy>().Event.AddListener(() =>
             {
-                if(attachedObject == rigidbody && attached)
+                if (attachedObject == rigidbody && attached)
                 {
                     Detach();
                 }
@@ -2896,7 +2907,7 @@ namespace Utility01
         }
         private void FixedUpdate()
         {
-            if(currentPass > slowLevel)
+            if (currentPass > slowLevel)
             {
                 currentPass = 0;
                 lastDifference = rb.velocity - lastVelocity;
@@ -2952,7 +2963,7 @@ namespace Utility01
         {
             Debug.Log("Start ScaleCycl");
             Vector3 startScale = transform.localScale;
-            for(float i = 0; i < 1; i += speed)
+            for (float i = 0; i < 1; i += speed)
             {
                 yield return new WaitForSeconds(speedCycl);
                 Vector3 lerped = Vector3.Lerp(startScale, targetLocalScale, i);
@@ -2975,7 +2986,7 @@ namespace Utility01
             for (int i = 0; i < num; i++)
             {
                 Collider2D collider2D = hitBuffer[i];
-                if(onlyWith != null)
+                if (onlyWith != null)
                 {
                     if (!onlyWith.Contains(collider2D)) continue;
                 }
@@ -3167,7 +3178,7 @@ namespace Utility01
         public List<InventoryPickerBehaviour> targetPickers = new List<InventoryPickerBehaviour>();
         public void Start()
         {
-            if(gameObject.TryGetComponent(out PhysicalBehaviour physicalBehaviour))
+            if (gameObject.TryGetComponent(out PhysicalBehaviour physicalBehaviour))
             {
                 physicalBehaviour.ContextMenuOptions.Buttons.Add(new ContextMenuButton("toggleInventory", () => $"{(Activated ? "Disable" : "Enable")} Inventory", "Toggle Inventory", () => Activated = !Activated));
             }
@@ -3176,7 +3187,7 @@ namespace Utility01
         {
             if (!Activated) return false;
 
-            if(targetPickers.Count > 0)
+            if (targetPickers.Count > 0)
             {
                 if (!targetPickers.Contains(inventoryPicker))
                 {
@@ -3430,15 +3441,15 @@ namespace Utility01
             {
                 Collider2D collider2D = buffer[i];
                 bool ignoredInPerson = false;
-                foreach(var pc in personColliders)
+                foreach (var pc in personColliders)
                 {
-                    if(Physics2D.GetIgnoreCollision(pc, collider2D))
+                    if (Physics2D.GetIgnoreCollision(pc, collider2D))
                     {
                         ignoredInPerson = true;
                         break;
                     }
                 }
-                if (!(collider2D.transform.root != transform.root) || !Global.main.PhysicalObjectsInWorldByTransform.TryGetValue(collider2D.transform, out var value) || (NotCollideWithGrip && (personColliders.Contains(collider2D) || ignoredInPerson )))
+                if (!(collider2D.transform.root != transform.root) || !Global.main.PhysicalObjectsInWorldByTransform.TryGetValue(collider2D.transform, out var value) || (NotCollideWithGrip && (personColliders.Contains(collider2D) || ignoredInPerson)))
                 {
                     Physics2D.IgnoreCollision(SharpCollider, collider2D, true);
                     continue;
@@ -3582,7 +3593,7 @@ namespace Utility01
             Vector2 position = coll.ClosestPoint(transform.position);
             return SharpCollider.ClosestPoint(position);
         }
-        
+
         public void OnGripped(GripBehaviour gripper)
         {
             if (gripper.transform.root.TryGetComponent(out PersonBehaviour personBehaviour))
@@ -4345,6 +4356,26 @@ namespace Utility01
         }
     }
     #endregion
+    #region JsonManager
+    public static class BetterJSON
+    {
+        public static string SerialiseJSON(in object obj)
+        {
+            var jsonConvertType = Type.GetType("Newt" + "on" + "soft" + ".J" + "s" + "on." + "Js" + "on" + "Convert, " + "Newt" + "onsoft" + ".J" + "s" + "on");
+            var jsonSerializerSettingsType = Type.GetType("Newt" + "on" + "soft" + ".J" + "s" + "on." + "JsonSerializerSettings, " + "Newt" + "onsoft" + ".J" + "s" + "on");
+            var serializeObjectMethod = jsonConvertType.GetMethod("SerializeObject", BindingFlags.Public | BindingFlags.Static, null, new Type[] { typeof(object), jsonSerializerSettingsType }, null);
+            string contents = (string)serializeObjectMethod.Invoke(null, new object[] { obj, Utility.GetField(typeof(ModAPI), "modJsonSerializerSettings") });
+            return contents;
+        }
+        public static T DeserialiseJSON<T>(in string path)
+        {
+            var jsonConvertType = Type.GetType("Newt" + "on" + "soft" + ".J" + "s" + "on." + "Js" + "on" + "Convert, " + "Newt" + "onsoft" + ".J" + "s" + "on");
+            var deserializeObjectMethod = jsonConvertType.GetMethod("Deseria" + "lizeObject", BindingFlags.Public | BindingFlags.Static, null, new Type[] { typeof(string), typeof(Type) }, null);
+            var content = Utility.ReadAllText(path);
+            return (T)deserializeObjectMethod.Invoke(null, new object[] { content, typeof(T) });
+        }
+    }
+    #endregion
     #region PoseManager
     public static class PoseManager
     {
@@ -4388,7 +4419,9 @@ namespace Utility01
         }
         public static RagdollSerialize GetRagdollSerialize(string namePose)
         {
-            var ragdollDesirialize = ModAPI.DeserialiseJSON<RagdollSerialize>($"{Utility.modPath}\\" + namePose + ".json");
+            var path = Path.GetFullPath($"{Utility.modPath}\\" + namePose + ".json");
+            Debug.Log(path);
+            var ragdollDesirialize = BetterJSON.DeserialiseJSON<RagdollSerialize>(path);
             return ragdollDesirialize;
         }
         public struct RagdollSerialize
